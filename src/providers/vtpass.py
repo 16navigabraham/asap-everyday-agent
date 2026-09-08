@@ -1,6 +1,6 @@
 """VTpass: Nigerian airtime, paid in naira.
 
-Reimplemented from an existing production system's JavaScript client —
+Reimplemented from an existing production system's JavaScript client:
 same response-code handling, same crash-safety guarantees, rebuilt in
 Python here against a separate VTpass credential (never a production one).
 
@@ -33,7 +33,7 @@ import httpx
 LAGOS = ZoneInfo("Africa/Lagos")
 TIMEOUT_SECONDS = 12.0
 
-# VTpass service ids for airtime. 9mobile is `etisalat` — they never
+# VTpass service ids for airtime. 9mobile is `etisalat`, they never
 # renamed it after the rebrand, and sending `9mobile` returns a
 # does-not-exist error.
 SERVICE_IDS = {
@@ -51,7 +51,7 @@ CODE = {
     "PROCESSING": "099",
     "QUERY": "001",
     "STILL_PROCESSING": "089",
-    "ALREADY_USED": "014",  # not a failure — the request id was already sent
+    "ALREADY_USED": "014",  # not a failure, the request id was already sent
     "LIKELY_DUPLICATE": "019",
     "NOT_PROCESSED": "091",  # proves no charge was applied
     "UNKNOWN_REQUEST_ID": "015",
@@ -65,7 +65,7 @@ CODE = {
 RETRYABLE_CODES = {CODE["NOT_PROCESSED"], "030", "083"}
 
 # Codes that are our problem, not the user's, and that a refund does not
-# fix — an empty VTpass wallet, a suspended account, an un-allowlisted
+# fix: an empty VTpass wallet, a suspended account, an un-allowlisted
 # server IP all fail every purchase, not one.
 NEEDS_REVIEW_CODES = {
     CODE["LOW_WALLET_BALANCE"],
@@ -96,7 +96,7 @@ class Decision:
 
 
 def classify(data: dict[str, Any]) -> Decision:
-    """Turn a VTpass response into a decision — see module docstring."""
+    """Turn a VTpass response into a decision, see module docstring."""
     code = str(data.get("code", ""))
     content = data.get("content") or {}
     transactions = content.get("transactions") or {}
@@ -127,7 +127,7 @@ def classify(data: dict[str, Any]) -> Decision:
 
 def request_id_for(created_at: datetime, job_id: str) -> str:
     """Same-attempt-same-id, so a retry cannot double-charge. VTpass checks
-    the date portion against today's Lagos date — see `still_valid_today`.
+    the date portion against today's Lagos date, see `still_valid_today`.
     """
     stamp = created_at.astimezone(LAGOS).strftime("%Y%m%d%H%M")
     return f"{stamp}asapagent{job_id}"
@@ -135,7 +135,7 @@ def request_id_for(created_at: datetime, job_id: str) -> str:
 
 def still_valid_today(created_at: datetime, now: datetime | None = None) -> bool:
     """A request id whose date portion isn't today gets rejected by VTpass
-    (085) — checking first turns a confusing rejection into a decision we
+    (085): checking first turns a confusing rejection into a decision we
     make deliberately, rather than a surprise.
     """
     now = now or datetime.now(LAGOS)
@@ -144,7 +144,7 @@ def still_valid_today(created_at: datetime, now: datetime | None = None) -> bool
 
 def _extract_token(data: dict[str, Any]) -> str | None:
     """Unused for airtime (no token), kept for parity with the ported
-    normalise() shape — electricity is out of scope for this submission.
+    normalise() shape. Electricity is out of scope for this submission.
     """
     raw = data.get("token") or data.get("purchased_code")
     if not raw:
@@ -168,7 +168,7 @@ class PurchaseResult:
 
 
 class VtpassClient:
-    """Airtime purchase only — the scope this submission ships. Data,
+    """Airtime purchase only, the scope this submission ships. Data,
     electricity, and TV exist in the source system's own provider client
     but aren't ported here (see the repo's README "Out of scope").
     """

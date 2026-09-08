@@ -1,15 +1,15 @@
-"""The airtime purchase tool — the one thing this agent is actually
+"""The airtime purchase tool: the one thing this agent is actually
 trusted to do without asking permission first, once network, phone, and
 amount are all clear and the wallet can cover it.
 
 **Debit-then-pay, not pay-then-debit.** The wallet debit happens first,
 keyed by a deterministic `reference` derived from the purchase's own
-inputs — so a model that calls this tool twice for what it thinks is the
+inputs, so a model that calls this tool twice for what it thinks is the
 same request (a retry, a duplicate turn) debits at most once, the same
 guarantee `wallet.store.debit`'s own idempotency gives a retried job in
 the source system it was ported from. If VTpass then fails in a way its
 own response proves cost nothing (091, or "unknown request id" on a
-resend), the debit is reversed — never assumed, only acted on when
+resend), the debit is reversed, never assumed, only acted on when
 VTpass says so outright, same rule the ported `proven_uncharged` logic
 encodes.
 """
@@ -26,14 +26,14 @@ from src.wallet import store
 
 _client = VtpassClient()
 
-# A flat, small per-purchase fee — this submission's own choice, not
+# A flat, small per-purchase fee: this submission's own choice, not
 # VTpass's. Kept separate from what VTpass actually charges (costKobo on
 # the response) so the two are never confused with each other.
 PLATFORM_FEE_KOBO = 0
 
 
 def _reference(chat_id: str, network: str, phone: str, amount_naira: float) -> str:
-    """Same inputs, same reference, within the same minute — so a model
+    """Same inputs, same reference, within the same minute, so a model
     retrying the exact same purchase in the same turn can't double-debit.
     A genuinely new purchase a minute later gets a fresh reference, same
     per-minute pattern the ported request-id logic uses.
@@ -48,7 +48,7 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
     """Buy airtime for a phone number, debiting the user's wallet.
 
     Only call this once the network, phone number, and amount are all
-    unambiguous and you've confirmed the wallet can cover it — this tool
+    unambiguous and you've confirmed the wallet can cover it, this tool
     executes the purchase immediately, it does not ask for confirmation
     itself.
 
@@ -81,7 +81,7 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
 
     if not result.ok:
         # Never reached VTpass at all (bad network, unconfigured client,
-        # unsupported network name) — nothing to prove was uncharged
+        # unsupported network name), nothing to prove was uncharged
         # because nothing was ever charged. Safe to reverse outright.
         store.fund(chat_id, amount_kobo)
         return {"ok": False, "reason": result.reason or "provider_unreachable"}
@@ -99,7 +99,7 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
         }
 
     if decision and decision.pending:
-        # Accepted but not yet confirmed delivered — the debit stands
+        # Accepted but not yet confirmed delivered: the debit stands
         # (money genuinely left, VTpass is processing), told to the user
         # as in-progress rather than either "done" or "failed".
         return {
@@ -113,7 +113,7 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
         }
 
     # Failed. Only reverse the debit when VTpass's own response proves
-    # nothing was charged — never on an assumption, same rule the ported
+    # nothing was charged, never on an assumption, same rule the ported
     # settle() logic enforces.
     if decision and decision.proven_uncharged:
         new_balance = store.fund(chat_id, amount_kobo)

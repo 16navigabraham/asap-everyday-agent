@@ -3,7 +3,7 @@ this submission's purchase logic was ported from.
 
 **Deliberately not a connection to any production database.** This
 submission ports the *business logic* (the VTpass integration, the
-crash-safe purchase flow, the autonomy rule) from an existing system —
+crash-safe purchase flow, the autonomy rule) from an existing system,
 it does not, and must never, read or write real customer balances from
 it. Each Telegram chat gets its own row here, seeded with a small demo
 balance, in a SQLite file this repo owns outright.
@@ -87,7 +87,7 @@ def balance_kobo(chat_id: str) -> int:
 def debit(chat_id: str, amount_kobo: int, reference: str) -> int:
     """Debit the wallet, atomically checked against the current balance.
 
-    Raises `InsufficientFunds` rather than silently going negative — the
+    Raises `InsufficientFunds` rather than silently going negative, the
     agent's own tool wrapper is what turns this into the "tell them the
     shortfall, don't attempt the purchase" behaviour the autonomy rule
     requires.
@@ -124,7 +124,7 @@ def debit(chat_id: str, amount_kobo: int, reference: str) -> int:
 
 
 def fund(chat_id: str, amount_kobo: int) -> int:
-    """Top up a demo wallet — for setting up a live judged demo with a
+    """Top up a demo wallet: for setting up a live judged demo with a
     specific balance on screen, not a real payment rail.
     """
     with _cursor() as conn:

@@ -5,7 +5,7 @@
 <h1 align="center">asap-everyday-agent</h1>
 
 <p align="center">
-  An agent that buys airtime for you over Telegram — no app, no menu, no confirmation tap.
+  An agent that buys airtime for you over Telegram. No app, no menu, no confirmation tap.
   <br>
   It only talks back when there's a real decision to make.
 </p>
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  Built for AWS's <a href="https://agentsforhumans.devpost.com">Agents for Humans</a> hackathon — Everyday Agents track.
+  Built for AWS's <a href="https://agentsforhumans.devpost.com">Agents for Humans</a> hackathon, Everyday Agents track.
 </p>
 
 ---
@@ -42,13 +42,13 @@
 
 Message the bot: *"send 500 naira MTN airtime to 08012345678."* If the
 details are clear and the wallet can cover it, the airtime is bought
-immediately — no confirmation step, no menu, no app. If the wallet's
+immediately, no confirmation step, no menu, no app. If the wallet's
 short, it says so and states the exact shortfall instead of guessing.
 If something's ambiguous, it asks exactly one question, not a form.
 
 This is a **working integration**, not a mock: purchases go through
 [VTpass](https://vtpass.com), a real Nigerian billing aggregator, with
-its full response-code handling ported faithfully — including the trap
+its full response-code handling ported faithfully, including the trap
 where VTpass's `000` response code means "accepted," not "delivered."
 
 ## Who it's for
@@ -81,8 +81,8 @@ confirm with tx reference
 
 ## Architecture
 
-Full breakdown — including exactly what's ported from an existing
-production system versus built new for this submission — is in
+Full breakdown, including exactly what's ported from an existing
+production system versus built new for this submission, is in
 [`docs/architecture.md`](docs/architecture.md).
 
 ```mermaid
@@ -102,13 +102,14 @@ The VTpass response-code handling and purchase-safety rules (the
 `000`-isn't-delivered trap, idempotency, reverse-only-when-proven-
 uncharged) are reimplemented here from a production system the author
 previously built, adapted from JavaScript into a new Python
-implementation on Strands Agents SDK — the disclosure this hackathon's
-own rules ask for when pre-existing work is incorporated into a
-submission. No production credential, database, or user data from that
-system is used anywhere in this repo; everything here — the agent, its
-tools, the wallet store, the Telegram interface — is new work built for
-this submission. See [`docs/architecture.md`](docs/architecture.md) for
-the full ported-vs-new breakdown.
+implementation on Strands Agents SDK. This is the disclosure this
+hackathon's own rules ask for when pre-existing work is incorporated
+into a submission. No production credential, database, or user data
+from that system is used anywhere in this repo; everything here (the
+agent, its tools, the wallet store, the Telegram interface) is new work
+built for this submission. See
+[`docs/architecture.md`](docs/architecture.md) for the full
+ported-vs-new breakdown.
 
 ## Getting started
 
@@ -122,13 +123,13 @@ python -m venv .venv
 source .venv/bin/activate   # .venv\Scripts\activate on Windows
 
 pip install -r requirements.txt
-cp .env.example .env         # fill in the values — see Configuration below
+cp .env.example .env         # fill in the values, see Configuration below
 
 python -m src.telegram_bot
 ```
 
-Strands defaults to Amazon Bedrock with Claude as the model provider —
-enable model access for it once, in the Bedrock console, under whichever
+Strands defaults to Amazon Bedrock with Claude as the model provider.
+Enable model access for it once, in the Bedrock console, under whichever
 AWS account `.env`'s credentials point at.
 
 ## Configuration
@@ -139,7 +140,7 @@ All variables live in `.env` (see `.env.example` for the full template).
 | --- | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Yes | From [@BotFather](https://t.me/BotFather) |
 | `VTPASS_BASE_URL` | Yes | `https://sandbox.vtpass.com` for testing |
-| `VTPASS_API_KEY` / `VTPASS_SECRET_KEY` | Yes | A key for **this project** — never a production key from elsewhere |
+| `VTPASS_API_KEY` / `VTPASS_SECRET_KEY` | Yes | A key for **this project**, never a production key from elsewhere |
 | `WALLET_DB_PATH` | No | SQLite file path, defaults to `wallet.db` |
 | `WALLET_SEED_KOBO` | No | Starting balance for a new chat, in kobo. Defaults to ₦5,000 |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes | A dedicated AWS account for this hackathon build |
@@ -153,7 +154,7 @@ pytest -v
 10 tests, covering the wallet store (seed, debit, insufficient funds,
 idempotency, top-up) and the purchase tool (successful buy, insufficient
 funds short-circuiting before the provider is ever called, an
-unsupported network, and both failure-reversal paths — reversed only
+unsupported network, and both failure-reversal paths, reversed only
 when VTpass's own response proves nothing was charged, left in place
 otherwise, the same rule the source system's production code enforces).
 
@@ -181,10 +182,10 @@ asap-everyday-agent/
 
 ## Out of scope for this submission
 
-- Data, electricity, and TV purchases — the source system supports all
+- Data, electricity, and TV purchases: the source system supports all
   three; only airtime is ported here.
-- WhatsApp integration — Telegram only, for this submission.
-- Real money movement into the wallet — seeded with a demo balance on
+- WhatsApp integration: Telegram only, for this submission.
+- Real money movement into the wallet: seeded with a demo balance on
   first use (see [`src/wallet/store.py`](src/wallet/store.py)).
 
 ## License

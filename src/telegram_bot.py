@@ -39,7 +39,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     agent = _agent_for(chat_id)
 
     # The agent's tools take chat_id as an explicit argument rather than
-    # reading it from ambient state — Strands tools are plain functions,
+    # reading it from ambient state. Strands tools are plain functions,
     # so there's no per-call request context to thread it through
     # implicitly. The system prompt doesn't mention this; it's routed in
     # via the message itself so the model always has it in context.
@@ -48,9 +48,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         result = agent(prompt)
         reply = str(result.message) if hasattr(result, "message") else str(result)
-    except Exception:  # noqa: BLE001 — a broken turn should still answer, not vanish
+    except Exception:  # noqa: BLE001 - a broken turn should still answer, not vanish
         logger.exception("Agent turn failed", extra={"chat_id": chat_id})
-        reply = "Something went wrong on my end — try that again in a moment."
+        reply = "Something went wrong on my end. Try that again in a moment."
 
     await update.message.reply_text(reply)
 
@@ -58,7 +58,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 def main() -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
-        raise SystemExit("TELEGRAM_BOT_TOKEN is not set — see .env.example")
+        raise SystemExit("TELEGRAM_BOT_TOKEN is not set. See .env.example")
 
     app = Application.builder().token(token).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

@@ -9,7 +9,7 @@ from src.wallet import store  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _fresh_db(tmp_path, monkeypatch):
-    """Each test gets its own SQLite file — state must never leak between
+    """Each test gets its own SQLite file, state must never leak between
     tests the way it would with a single shared :memory: connection reused
     across store._connect() calls.
     """

@@ -17,7 +17,7 @@ flowchart LR
 ## What was ported from an existing system, and what's new
 
 The purchase logic here is reimplemented from a production WhatsApp
-money agent the author previously built (JavaScript/Node.js) — disclosed
+money agent the author previously built (JavaScript/Node.js), disclosed
 per this hackathon's rules on incorporating pre-existing work. No
 production credential, database, or user data from that system is used
 anywhere in this repo.
@@ -26,17 +26,17 @@ anywhere in this repo.
 | --- | --- |
 | VTpass response-code classification (`classify()`), the "000 isn't delivered" trap, idempotency handling | Ported from the source system's provider client, reimplemented in Python |
 | Debit-then-pay, reverse-only-when-proven-uncharged purchase safety | Ported from the source system's crash-safety logic, adapted from a queued-job model to a synchronous tool call |
-| Wallet balance / debit / fund, kobo-denominated | New — a standalone SQLite store for this submission, not a connection to any production database |
-| Autonomy rule (system prompt) | New — this is the actual hackathon deliverable: a plain-language rule the model follows, not scattered checks |
-| Telegram bot, per-chat agent instances | New — the chat interface for this submission |
-| Strands `Agent` + `@tool` wiring | New — this submission's actual use of the Strands Agents SDK |
+| Wallet balance / debit / fund, kobo-denominated | New: a standalone SQLite store for this submission, not a connection to any production database |
+| Autonomy rule (system prompt) | New: this is the actual hackathon deliverable, a plain-language rule the model follows, not scattered checks |
+| Telegram bot, per-chat agent instances | New: the chat interface for this submission |
+| Strands `Agent` + `@tool` wiring | New: this submission's actual use of the Strands Agents SDK |
 
 ## Why a synchronous tool call instead of a job queue
 
 The source system's real purchase flow is asynchronous: a job gets
 queued, a worker claims it, and can retry a crashed attempt because the
 request id was recorded before the provider call ever went out. That
-two-process design solves a problem this submission doesn't have —
+two-process design solves a problem this submission doesn't have:
 there's no separate worker here to crash independently of the tool call
 itself. The purchase tool keeps the part of that design that still
 matters at this scale (a deterministic, idempotent reference so a
@@ -48,6 +48,6 @@ solve a real problem here.
 
 Runs anywhere Python does. For AWS Bedrock AgentCore deployment (the
 hackathon's suggested path, strengthens the Technical Implementation
-score), see the AWS credentials section in `.env.example` — the agent
+score), see the AWS credentials section in `.env.example`. The agent
 code itself doesn't change between local and AgentCore deployment, only
 how the process gets hosted.

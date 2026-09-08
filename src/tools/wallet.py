@@ -1,4 +1,4 @@
-"""The wallet-balance tool — read-only, so the agent can check funds
+"""The wallet-balance tool: read-only, so the agent can check funds
 before deciding whether to attempt a purchase or tell the user their
 shortfall.
 """

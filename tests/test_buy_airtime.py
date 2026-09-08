@@ -44,7 +44,7 @@ def test_insufficient_funds_is_reported_without_calling_the_provider():
     assert result["ok"] is False
     assert result["reason"] == "insufficient_funds"
     assert result["shortfall_naira"] > 0
-    mock_pay.assert_not_called()  # never reached the provider — the wallet check happens first
+    mock_pay.assert_not_called()  # never reached the provider, the wallet check happens first
     assert store.balance_kobo("chat-b") == store.DEFAULT_SEED_KOBO  # untouched
 
 
@@ -77,7 +77,7 @@ def test_a_failure_vtpass_proves_uncharged_reverses_the_debit():
 
 def test_a_failure_vtpass_does_not_prove_uncharged_leaves_the_debit_in_place():
     """Mirrors the source system's own rule: refunding on an assumption
-    is how the ledger and the provider stop agreeing — an ambiguous
+    is how the ledger and the provider stop agreeing, an ambiguous
     failure needs a human, not an automatic reversal.
     """
     starting = store.balance_kobo("chat-e")
