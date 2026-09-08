@@ -1,8 +1,8 @@
 """VTpass: Nigerian airtime, paid in naira.
 
-Ported from ASAP's production `providers/vtpass.js` — same response-code
-handling, same crash-safety guarantees, reimplemented for this hackathon
-copy against a separate VTpass credential (never the production one).
+Reimplemented from an existing production system's JavaScript client —
+same response-code handling, same crash-safety guarantees, rebuilt in
+Python here against a separate VTpass credential (never a production one).
 
 **Their response codes need care, and one of them is a trap.**
 
@@ -169,8 +169,8 @@ class PurchaseResult:
 
 class VtpassClient:
     """Airtime purchase only — the scope this submission ships. Data,
-    electricity, and TV exist in ASAP's own provider client but aren't
-    ported here (see the repo's README "Explicit non-goals").
+    electricity, and TV exist in the source system's own provider client
+    but aren't ported here (see the repo's README "Out of scope").
     """
 
     def __init__(

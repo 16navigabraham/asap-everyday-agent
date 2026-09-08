@@ -7,10 +7,11 @@ keyed by a deterministic `reference` derived from the purchase's own
 inputs — so a model that calls this tool twice for what it thinks is the
 same request (a retry, a duplicate turn) debits at most once, the same
 guarantee `wallet.store.debit`'s own idempotency gives a retried job in
-ASAP's real system. If VTpass then fails in a way its own response
-proves cost nothing (091, or "unknown request id" on a resend), the debit
-is reversed — never assumed, only acted on when VTpass says so outright,
-same rule ASAP's own `provenUncharged` encodes.
+the source system it was ported from. If VTpass then fails in a way its
+own response proves cost nothing (091, or "unknown request id" on a
+resend), the debit is reversed — never assumed, only acted on when
+VTpass says so outright, same rule the ported `proven_uncharged` logic
+encodes.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ def _reference(chat_id: str, network: str, phone: str, amount_naira: float) -> s
     """Same inputs, same reference, within the same minute — so a model
     retrying the exact same purchase in the same turn can't double-debit.
     A genuinely new purchase a minute later gets a fresh reference, same
-    as ASAP's own per-minute request id.
+    per-minute pattern the ported request-id logic uses.
     """
     minute_stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
     raw = f"{chat_id}:{network}:{phone}:{amount_naira}:{minute_stamp}"
@@ -112,8 +113,8 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
         }
 
     # Failed. Only reverse the debit when VTpass's own response proves
-    # nothing was charged — never on an assumption, same rule ASAP's own
-    # settle() enforces.
+    # nothing was charged — never on an assumption, same rule the ported
+    # settle() logic enforces.
     if decision and decision.proven_uncharged:
         new_balance = store.fund(chat_id, amount_kobo)
 

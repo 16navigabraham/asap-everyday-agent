@@ -30,7 +30,7 @@
 - [Who it's for](#who-its-for)
 - [How it works](#how-it-works)
 - [Architecture](#architecture)
-- [Relationship to ASAP](#relationship-to-asap)
+- [Disclosure](#disclosure)
 - [Getting started](#getting-started)
 - [Configuration](#configuration)
 - [Testing](#testing)
@@ -81,8 +81,8 @@ confirm with tx reference
 
 ## Architecture
 
-Full breakdown — including exactly what's ported from ASAP's production
-code versus built new for this submission — is in
+Full breakdown — including exactly what's ported from an existing
+production system versus built new for this submission — is in
 [`docs/architecture.md`](docs/architecture.md).
 
 ```mermaid
@@ -96,21 +96,19 @@ flowchart LR
     A -. model calls .-> BR[Amazon Bedrock]
 ```
 
-## Relationship to ASAP
+## Disclosure
 
-This is a from-scratch, MIT-licensed reimplementation of one flow
-(airtime purchase) from [ASAP](https://useasap.xyz), a production
-WhatsApp money agent. The VTpass response-code handling and
-purchase-safety rules are ported faithfully from ASAP's own code — the
-disclosure this hackathon's own rules ask for when pre-existing work is
-incorporated. Nothing here reads from or writes to ASAP's production
-database, and no ASAP production credential is used anywhere in this
-repo. See [`docs/architecture.md`](docs/architecture.md) for the full
-ported-vs-new breakdown.
-
-ASAP's own WhatsApp Business number is currently restricted by Meta,
-which is the practical reason this submission uses Telegram — not a
-limitation of the underlying agent logic.
+The VTpass response-code handling and purchase-safety rules (the
+`000`-isn't-delivered trap, idempotency, reverse-only-when-proven-
+uncharged) are reimplemented here from a production system the author
+previously built, adapted from JavaScript into a new Python
+implementation on Strands Agents SDK — the disclosure this hackathon's
+own rules ask for when pre-existing work is incorporated into a
+submission. No production credential, database, or user data from that
+system is used anywhere in this repo; everything here — the agent, its
+tools, the wallet store, the Telegram interface — is new work built for
+this submission. See [`docs/architecture.md`](docs/architecture.md) for
+the full ported-vs-new breakdown.
 
 ## Getting started
 
@@ -141,10 +139,10 @@ All variables live in `.env` (see `.env.example` for the full template).
 | --- | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Yes | From [@BotFather](https://t.me/BotFather) |
 | `VTPASS_BASE_URL` | Yes | `https://sandbox.vtpass.com` for testing |
-| `VTPASS_API_KEY` / `VTPASS_SECRET_KEY` | Yes | A key for **this project** — never ASAP's production key |
+| `VTPASS_API_KEY` / `VTPASS_SECRET_KEY` | Yes | A key for **this project** — never a production key from elsewhere |
 | `WALLET_DB_PATH` | No | SQLite file path, defaults to `wallet.db` |
 | `WALLET_SEED_KOBO` | No | Starting balance for a new chat, in kobo. Defaults to ₦5,000 |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes | A **separate** AWS account from ASAP's production one |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes | A dedicated AWS account for this hackathon build |
 
 ## Testing
 
@@ -157,7 +155,7 @@ idempotency, top-up) and the purchase tool (successful buy, insufficient
 funds short-circuiting before the provider is ever called, an
 unsupported network, and both failure-reversal paths — reversed only
 when VTpass's own response proves nothing was charged, left in place
-otherwise, the same rule ASAP's production code enforces).
+otherwise, the same rule the source system's production code enforces).
 
 ## Project structure
 
@@ -183,8 +181,8 @@ asap-everyday-agent/
 
 ## Out of scope for this submission
 
-- Data, electricity, and TV purchases — ASAP supports all three; only
-  airtime is ported here.
+- Data, electricity, and TV purchases — the source system supports all
+  three; only airtime is ported here.
 - WhatsApp integration — Telegram only, for this submission.
 - Real money movement into the wallet — seeded with a demo balance on
   first use (see [`src/wallet/store.py`](src/wallet/store.py)).

@@ -1,8 +1,7 @@
-"""Telegram as the chat interface for this submission, replacing WhatsApp
-(the production ASAP WhatsApp Business number is currently flagged by
-Meta — see the README). One Strands agent per chat, kept in memory for
-the process's lifetime, so one user's conversation never bleeds into
-another's the way a single shared agent instance would.
+"""Telegram as the chat interface for this submission. One Strands agent
+per chat, kept in memory for the process's lifetime, so one user's
+conversation never bleeds into another's the way a single shared agent
+instance would.
 """
 
 from __future__ import annotations

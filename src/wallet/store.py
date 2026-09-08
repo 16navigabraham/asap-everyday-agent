@@ -1,15 +1,16 @@
-"""A standalone demo wallet, kobo-denominated like ASAP's real ledger.
+"""A standalone demo wallet, kobo-denominated like the production ledger
+this submission's purchase logic was ported from.
 
-**Deliberately not a connection to ASAP's production database.** This
-submission ports ASAP's *business logic* (the VTpass integration, the
-crash-safe purchase flow, the autonomy rule) — it does not, and must
-never, read or write real ASAP customer balances. Each Telegram chat gets
-its own row here, seeded with a small demo balance, in a SQLite file this
-repo owns outright.
+**Deliberately not a connection to any production database.** This
+submission ports the *business logic* (the VTpass integration, the
+crash-safe purchase flow, the autonomy rule) from an existing system —
+it does not, and must never, read or write real customer balances from
+it. Each Telegram chat gets its own row here, seeded with a small demo
+balance, in a SQLite file this repo owns outright.
 
-Kobo, not naira, for the same reason ASAP's own ledger uses it: naira has
-a fractional unit, and float arithmetic on money is how a balance quietly
-drifts by a kobo here and there until nothing reconciles.
+Kobo, not naira, for the same reason the source ledger uses it: naira
+has a fractional unit, and float arithmetic on money is how a balance
+quietly drifts by a kobo here and there until nothing reconciles.
 """
 
 from __future__ import annotations
@@ -92,8 +93,9 @@ def debit(chat_id: str, amount_kobo: int, reference: str) -> int:
     requires.
 
     Idempotent on `reference`: the same reference debits at most once,
-    the same protection ASAP's own `on conflict (reference) do nothing`
-    gives a webhook redelivery, applied here to a retried tool call.
+    the same protection an `on conflict (reference) do nothing` clause
+    gives a webhook redelivery in the source system, applied here to a
+    retried tool call.
     """
     with _cursor() as conn:
         _ensure_wallet(conn, chat_id)

@@ -76,9 +76,9 @@ def test_a_failure_vtpass_proves_uncharged_reverses_the_debit():
 
 
 def test_a_failure_vtpass_does_not_prove_uncharged_leaves_the_debit_in_place():
-    """Mirrors ASAP's own rule: refunding on an assumption is how the
-    ledger and the provider stop agreeing — an ambiguous failure needs a
-    human, not an automatic reversal.
+    """Mirrors the source system's own rule: refunding on an assumption
+    is how the ledger and the provider stop agreeing — an ambiguous
+    failure needs a human, not an automatic reversal.
     """
     starting = store.balance_kobo("chat-e")
     ambiguous_failure = PurchaseResult(
