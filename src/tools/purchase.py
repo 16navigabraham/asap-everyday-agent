@@ -1,0 +1,126 @@
+"""The airtime purchase tool — the one thing this agent is actually
+trusted to do without asking permission first, once network, phone, and
+amount are all clear and the wallet can cover it.
+
+**Debit-then-pay, not pay-then-debit.** The wallet debit happens first,
+keyed by a deterministic `reference` derived from the purchase's own
+inputs — so a model that calls this tool twice for what it thinks is the
+same request (a retry, a duplicate turn) debits at most once, the same
+guarantee `wallet.store.debit`'s own idempotency gives a retried job in
+ASAP's real system. If VTpass then fails in a way its own response
+proves cost nothing (091, or "unknown request id" on a resend), the debit
+is reversed — never assumed, only acted on when VTpass says so outright,
+same rule ASAP's own `provenUncharged` encodes.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from datetime import datetime, timezone
+
+from strands import tool
+
+from src.providers.vtpass import VtpassClient, request_id_for
+from src.wallet import store
+
+_client = VtpassClient()
+
+# A flat, small per-purchase fee — this submission's own choice, not
+# VTpass's. Kept separate from what VTpass actually charges (costKobo on
+# the response) so the two are never confused with each other.
+PLATFORM_FEE_KOBO = 0
+
+
+def _reference(chat_id: str, network: str, phone: str, amount_naira: float) -> str:
+    """Same inputs, same reference, within the same minute — so a model
+    retrying the exact same purchase in the same turn can't double-debit.
+    A genuinely new purchase a minute later gets a fresh reference, same
+    as ASAP's own per-minute request id.
+    """
+    minute_stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
+    raw = f"{chat_id}:{network}:{phone}:{amount_naira}:{minute_stamp}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+@tool
+def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> dict:
+    """Buy airtime for a phone number, debiting the user's wallet.
+
+    Only call this once the network, phone number, and amount are all
+    unambiguous and you've confirmed the wallet can cover it — this tool
+    executes the purchase immediately, it does not ask for confirmation
+    itself.
+
+    Args:
+        chat_id: The Telegram chat id whose wallet gets debited.
+        network: One of mtn, airtel, glo, 9mobile.
+        phone: The phone number to top up, in local Nigerian format.
+        amount_naira: How much airtime to buy, in naira.
+    """
+    amount_kobo = round(amount_naira * 100)
+    reference = _reference(chat_id, network, phone, amount_naira)
+
+    try:
+        new_balance = store.debit(chat_id, amount_kobo, reference)
+    except store.InsufficientFunds as shortfall:
+        return {
+            "ok": False,
+            "reason": "insufficient_funds",
+            "balance_naira": shortfall.balance_kobo / 100,
+            "shortfall_naira": shortfall.shortfall_kobo / 100,
+        }
+
+    request_id = request_id_for(datetime.now(timezone.utc), reference)
+    result = _client.pay(
+        request_id=request_id,
+        network=network,
+        phone=phone,
+        amount_naira=amount_naira,
+    )
+
+    if not result.ok:
+        # Never reached VTpass at all (bad network, unconfigured client,
+        # unsupported network name) — nothing to prove was uncharged
+        # because nothing was ever charged. Safe to reverse outright.
+        store.fund(chat_id, amount_kobo)
+        return {"ok": False, "reason": result.reason or "provider_unreachable"}
+
+    decision = result.decision
+
+    if decision and decision.delivered:
+        return {
+            "ok": True,
+            "transaction_id": result.transaction_id,
+            "amount_naira": amount_naira,
+            "network": network,
+            "phone": phone,
+            "new_balance_naira": new_balance / 100,
+        }
+
+    if decision and decision.pending:
+        # Accepted but not yet confirmed delivered — the debit stands
+        # (money genuinely left, VTpass is processing), told to the user
+        # as in-progress rather than either "done" or "failed".
+        return {
+            "ok": True,
+            "pending": True,
+            "transaction_id": result.transaction_id,
+            "amount_naira": amount_naira,
+            "network": network,
+            "phone": phone,
+            "new_balance_naira": new_balance / 100,
+        }
+
+    # Failed. Only reverse the debit when VTpass's own response proves
+    # nothing was charged — never on an assumption, same rule ASAP's own
+    # settle() enforces.
+    if decision and decision.proven_uncharged:
+        new_balance = store.fund(chat_id, amount_kobo)
+
+    return {
+        "ok": False,
+        "reason": "provider_declined",
+        "code": decision.code if decision else None,
+        "needs_review": bool(decision and decision.needs_review),
+        "new_balance_naira": new_balance / 100,
+    }
