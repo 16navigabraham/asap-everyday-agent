@@ -17,6 +17,11 @@ from src.agent import build_agent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("asap-agent-telegram")
 
+# httpx logs the full request URL at INFO, and python-telegram-bot's Bot API
+# calls embed the bot token directly in that URL (api.telegram.org/bot<TOKEN>/...).
+# Left at INFO, the token ends up in plaintext in every log line.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # chat_id -> Agent. Strands agents carry their own conversation history
 # internally, so reusing the same instance across a chat's messages is
 # what gives the agent memory of earlier turns.
