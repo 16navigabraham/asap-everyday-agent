@@ -10,10 +10,21 @@ is not.
 
 from __future__ import annotations
 
+from botocore.config import Config
 from strands import Agent
+from strands.models import BedrockModel
 
 from src.tools.purchase import buy_airtime
 from src.tools.wallet import check_wallet_balance
+
+# Bedrock's default client has no read timeout, so a slow or stuck response
+# hangs the whole chat turn forever instead of failing with something the
+# user (or telegram_bot.py's except Exception) can actually see and report.
+_BEDROCK_CLIENT_CONFIG = Config(
+    connect_timeout=10,
+    read_timeout=30,
+    retries={"max_attempts": 2, "mode": "standard"},
+)
 
 SYSTEM_PROMPT = """\
 You handle airtime top-ups for people over chat, so they don't have to \
@@ -45,6 +56,7 @@ scope for this agent. Say so plainly if asked for anything else \
 
 def build_agent() -> Agent:
     return Agent(
+        model=BedrockModel(boto_client_config=_BEDROCK_CLIENT_CONFIG),
         tools=[check_wallet_balance, buy_airtime],
         system_prompt=SYSTEM_PROMPT,
     )
