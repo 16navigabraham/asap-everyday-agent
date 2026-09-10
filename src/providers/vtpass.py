@@ -83,6 +83,17 @@ NEEDS_REVIEW_CODES = {
 }
 
 
+# Every failure code this module actually understands. A code outside
+# this set on a `failed` decision means VTpass told us something we
+# don't have a catalogued meaning for, not that we know it's a hard,
+# final failure.
+KNOWN_FAILURE_CODES = RETRYABLE_CODES | NEEDS_REVIEW_CODES | {
+    CODE["NOT_PROCESSED"],
+    CODE["UNKNOWN_REQUEST_ID"],
+    CODE["REVERSAL"],
+}
+
+
 @dataclass
 class Decision:
     code: str
@@ -93,6 +104,12 @@ class Decision:
     needs_review: bool = False
     # Whether we can state, rather than assume, the user was not charged.
     proven_uncharged: bool = False
+    # False means this failure code isn't one this module has a
+    # catalogued meaning for. Seen live: VTpass's sandbox returned an
+    # unrecognized code on the initial call that a requery moments later
+    # resolved to a clean success, an unrecognized code is a reason to
+    # check again, not a reason to trust it as final.
+    recognized: bool = True
 
 
 def classify(data: dict[str, Any]) -> Decision:
@@ -122,6 +139,7 @@ def classify(data: dict[str, Any]) -> Decision:
         retryable=code in RETRYABLE_CODES,
         needs_review=code in NEEDS_REVIEW_CODES,
         proven_uncharged=code in (CODE["NOT_PROCESSED"], CODE["UNKNOWN_REQUEST_ID"], CODE["REVERSAL"]),
+        recognized=code in KNOWN_FAILURE_CODES,
     )
 
 

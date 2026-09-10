@@ -14,7 +14,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/Built%20with-Strands%20Agents-00e6a4" alt="Built with Strands Agents">
-  <img src="https://img.shields.io/badge/tests-22%20passing-brightgreen" alt="22 tests passing">
+  <img src="https://img.shields.io/badge/tests-24%20passing-brightgreen" alt="24 tests passing">
   <a href="https://agentsforhumans.devpost.com"><img src="https://img.shields.io/badge/hackathon-Agents%20for%20Humans-orange" alt="Agents for Humans Hackathon"></a>
 </p>
 
@@ -185,16 +185,16 @@ as a bug rather than as the sandbox behaving exactly as documented.
 pytest -v
 ```
 
-22 tests, covering the wallet store (seed, debit, insufficient funds,
+24 tests, covering the wallet store (seed, debit, insufficient funds,
 idempotency, top-up), the purchase tool (successful buy, insufficient
 funds short-circuiting before the provider is ever called, an
 unsupported network, both failure-reversal paths, reversed only
 when VTpass's own response proves nothing was charged, left in place
-otherwise, a timed-out request checked against VTpass's own record via
-`requery()` before anything is decided rather than assumed uncharged,
-plus the `reversed` field and the docstring guardrail that stop the
-agent from narrating a status the tool never returned), the
-model-provider selection (`ANTHROPIC_API_KEY` set picks Anthropic,
+otherwise, a timed-out request or an unrecognized failure code checked
+against VTpass's own record via `requery()` before anything is decided
+rather than assumed, plus the `reversed` field and the docstring
+guardrail that stop the agent from narrating a status the tool never
+returned), the model-provider selection (`ANTHROPIC_API_KEY` set picks Anthropic,
 unset falls back to Bedrock), and the Telegram handler itself (only the
 reply text reaches the chat, never the raw result structure, and the
 typing indicator actually fires).

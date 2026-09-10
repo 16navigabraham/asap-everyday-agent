@@ -74,6 +74,10 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
       not call it "pending" (that implies a known in-progress status)
       or "reversed" (nothing was put back).
 
+    An unrecognized failure code from VTpass is checked once against its
+    own record before any of the above is decided, its first answer on
+    a code this module doesn't recognize is not treated as final.
+
     Args:
         chat_id: The Telegram chat id whose wallet gets debited.
         network: One of mtn, airtel, glo, 9mobile.
@@ -132,6 +136,17 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
             }
     else:
         decision = result.decision
+
+    if decision and decision.failed and not decision.recognized:
+        # VTpass returned a failure code this module has no catalogued
+        # meaning for. Seen live: an unrecognized code on the first call
+        # resolved to a clean success on requery moments later, the
+        # sandbox's first answer isn't necessarily its last one, and an
+        # unrecognized code is exactly the case where we can't trust it
+        # as final. One requery, same as the timeout path above.
+        requeried = _client.requery(request_id)
+        if requeried.ok and requeried.decision:
+            result, decision = requeried, requeried.decision
 
     if decision and decision.delivered:
         return {

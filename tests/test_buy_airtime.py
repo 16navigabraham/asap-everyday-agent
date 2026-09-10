@@ -155,6 +155,61 @@ def test_a_timeout_that_requery_also_cannot_confirm_stays_debited_for_review():
     assert store.balance_kobo("chat-h") == starting - 50_000  # left debited, never guessed uncharged
 
 
+def test_an_unrecognized_failure_code_is_checked_with_requery_before_finalizing():
+    """Caught live: VTpass's sandbox returned an unrecognized code (007)
+    on the first call, and a requery moments later showed the purchase
+    had actually gone through. Trusting the first answer on a code this
+    module doesn't catalogue would have reported a false decline.
+    """
+    starting = store.balance_kobo("chat-i")
+    unrecognized = PurchaseResult(
+        ok=True,
+        request_id="req-7",
+        code="007",
+        decision=Decision(code="007", failed=True, recognized=False),
+    )
+    confirmed_delivered = PurchaseResult(
+        ok=True,
+        request_id="req-7",
+        code="000",
+        status="delivered",
+        transaction_id="vtpass-tx-777",
+        decision=Decision(code="000", delivered=True),
+    )
+
+    with patch.object(purchase._client, "pay", return_value=unrecognized), \
+         patch.object(purchase._client, "requery", return_value=confirmed_delivered) as mock_requery:
+        result = purchase.buy_airtime(chat_id="chat-i", network="mtn", phone="08012345678", amount_naira=500)
+
+    mock_requery.assert_called_once()
+    assert result["ok"] is True
+    assert result["transaction_id"] == "vtpass-tx-777"
+    assert store.balance_kobo("chat-i") == starting - 50_000
+
+
+def test_a_recognized_failure_code_is_not_requeried():
+    """A well-catalogued decline (like 087, invalid credentials) is a
+    certain, terminal answer, requerying it wastes a call and can't
+    change an account-level problem into a success.
+    """
+    starting = store.balance_kobo("chat-j")
+    invalid_credentials = PurchaseResult(
+        ok=True,
+        request_id="req-8",
+        code="087",
+        decision=Decision(code="087", failed=True, needs_review=True, recognized=True),
+    )
+
+    with patch.object(purchase._client, "pay", return_value=invalid_credentials), \
+         patch.object(purchase._client, "requery") as mock_requery:
+        result = purchase.buy_airtime(chat_id="chat-j", network="mtn", phone="08012345678", amount_naira=500)
+
+    mock_requery.assert_not_called()
+    assert result["ok"] is False
+    assert result["needs_review"] is True
+    assert store.balance_kobo("chat-j") == starting - 50_000
+
+
 def test_buy_airtime_docstring_forbids_inventing_a_status_the_tool_did_not_return():
     doc = (purchase.buy_airtime.__doc__ or "").lower()
     assert "only the fields this tool actually returns" in doc
