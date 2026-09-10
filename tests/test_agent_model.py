@@ -66,3 +66,12 @@ def test_the_agent_is_told_never_to_answer_a_balance_question_from_memory():
     doc = (check_wallet_balance.__doc__ or "").lower()
     assert "even if you already" in doc
     assert "memory" in doc
+
+
+def test_the_agent_is_told_to_report_only_what_buy_airtime_actually_returned():
+    # Caught live: the agent described a declined-and-reversed purchase
+    # as "pending", a status the tool never returned. The system prompt
+    # now pins the exact fields it's allowed to narrate from.
+    prompt = SYSTEM_PROMPT.lower()
+    assert "only the fields it actually returned" in prompt
+    assert '"pending"' in prompt

@@ -52,6 +52,23 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
     executes the purchase immediately, it does not ask for confirmation
     itself.
 
+    Report the outcome using ONLY the fields this tool actually returns,
+    never a status it didn't return. Specifically:
+    - ok is True and pending is missing or False: it succeeded, say so
+      plainly with the transaction_id.
+    - ok is True and pending is True: it is genuinely still processing.
+      This is the only case where "pending" is the right word. The debit
+      stands, say so.
+    - ok is False and reversed is True: it was declined and the debit
+      was put back, the user was not charged. Never call this "pending",
+      it is a failure that has already been undone.
+    - ok is False and reversed is False: it was declined and the debit
+      was NOT put back (needs_review is True), tell the user plainly
+      that money was held pending manual review, never say it "hasn't
+      been debited" when reversed is False.
+    - ok is False and reason is insufficient_funds: state the shortfall
+      from shortfall_naira, do not attempt the purchase.
+
     Args:
         chat_id: The Telegram chat id whose wallet gets debited.
         network: One of mtn, airtel, glo, 9mobile.
@@ -84,7 +101,7 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
         # unsupported network name), nothing to prove was uncharged
         # because nothing was ever charged. Safe to reverse outright.
         store.fund(chat_id, amount_kobo)
-        return {"ok": False, "reason": result.reason or "provider_unreachable"}
+        return {"ok": False, "reason": result.reason or "provider_unreachable", "reversed": True}
 
     decision = result.decision
 
@@ -115,7 +132,8 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
     # Failed. Only reverse the debit when VTpass's own response proves
     # nothing was charged, never on an assumption, same rule the ported
     # settle() logic enforces.
-    if decision and decision.proven_uncharged:
+    reversed_ = bool(decision and decision.proven_uncharged)
+    if reversed_:
         new_balance = store.fund(chat_id, amount_kobo)
 
     return {
@@ -123,5 +141,6 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
         "reason": "provider_declined",
         "code": decision.code if decision else None,
         "needs_review": bool(decision and decision.needs_review),
+        "reversed": reversed_,
         "new_balance_naira": new_balance / 100,
     }

@@ -72,6 +72,7 @@ def test_a_failure_vtpass_proves_uncharged_reverses_the_debit():
 
     assert result["ok"] is False
     assert result["reason"] == "provider_declined"
+    assert result["reversed"] is True
     assert store.balance_kobo("chat-d") == starting  # reversed, not left debited
 
 
@@ -93,4 +94,27 @@ def test_a_failure_vtpass_does_not_prove_uncharged_leaves_the_debit_in_place():
 
     assert result["ok"] is False
     assert result["needs_review"] is True
+    assert result["reversed"] is False
     assert store.balance_kobo("chat-e") == starting - 50_000  # NOT reversed
+
+
+def test_provider_unreachable_is_reported_as_reversed():
+    # A caught-live bug: the agent once described this outcome as
+    # "pending" when the tool never returned pending at all, this is
+    # what the unreachable path actually hands back to it.
+    starting = store.balance_kobo("chat-f")
+    unreachable = PurchaseResult(ok=False, request_id="req-4", reason="unreachable:timeout")
+
+    with patch.object(purchase._client, "pay", return_value=unreachable):
+        result = purchase.buy_airtime(chat_id="chat-f", network="mtn", phone="08012345678", amount_naira=500)
+
+    assert result["ok"] is False
+    assert result["reversed"] is True
+    assert "pending" not in result
+    assert store.balance_kobo("chat-f") == starting
+
+
+def test_buy_airtime_docstring_forbids_inventing_a_status_the_tool_did_not_return():
+    doc = (purchase.buy_airtime.__doc__ or "").lower()
+    assert "only the fields this tool actually returns" in doc
+    assert "never call this \"pending\"" in doc or 'never call this "pending"' in doc

@@ -14,12 +14,18 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/Built%20with-Strands%20Agents-00e6a4" alt="Built with Strands Agents">
-  <img src="https://img.shields.io/badge/tests-17%20passing-brightgreen" alt="17 tests passing">
+  <img src="https://img.shields.io/badge/tests-20%20passing-brightgreen" alt="20 tests passing">
   <a href="https://agentsforhumans.devpost.com"><img src="https://img.shields.io/badge/hackathon-Agents%20for%20Humans-orange" alt="Agents for Humans Hackathon"></a>
 </p>
 
 <p align="center">
   Built for AWS's <a href="https://agentsforhumans.devpost.com">Agents for Humans</a> hackathon, Everyday Agents track.
+</p>
+
+<p align="center">
+  <strong><a href="https://t.me/useasap_bot">Try the live demo on Telegram → @useasap_bot</a></strong>
+  <br>
+  <sub>Runs against VTpass's sandbox with a demo wallet, seeded fresh at ₦5,000 per chat, see <a href="#trying-it-out">Trying it out</a> for the test number that shows a full successful purchase.</sub>
 </p>
 
 ---
@@ -179,13 +185,14 @@ as a bug rather than as the sandbox behaving exactly as documented.
 pytest -v
 ```
 
-17 tests, covering the wallet store (seed, debit, insufficient funds,
+20 tests, covering the wallet store (seed, debit, insufficient funds,
 idempotency, top-up), the purchase tool (successful buy, insufficient
 funds short-circuiting before the provider is ever called, an
-unsupported network, and both failure-reversal paths, reversed only
+unsupported network, both failure-reversal paths, reversed only
 when VTpass's own response proves nothing was charged, left in place
-otherwise, the same rule the source system's production code enforces),
-the model-provider selection (`ANTHROPIC_API_KEY` set picks Anthropic,
+otherwise, plus the `reversed` field and the docstring guardrail that
+stop the agent from narrating a status the tool never returned), the
+model-provider selection (`ANTHROPIC_API_KEY` set picks Anthropic,
 unset falls back to Bedrock), and the Telegram handler itself (only the
 reply text reaches the chat, never the raw result structure, and the
 typing indicator actually fires).
