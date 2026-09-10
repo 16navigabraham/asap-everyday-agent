@@ -11,8 +11,14 @@ flowchart LR
     PT --> WS
     PT --> VT[VtpassClient\nsrc/providers/vtpass.py]
     VT -- HTTPS --> VP[VTpass API\nreal Nigerian billing aggregator]
-    A -. model calls .-> BR[Amazon Bedrock\nClaude, via AWS credentials]
+    A -. model calls, ANTHROPIC_API_KEY set .-> AN[Anthropic API]
+    A -. model calls, unset .-> BR[Amazon Bedrock\nClaude, via AWS credentials]
 ```
+
+Strands is model-agnostic: `_build_model()` in `src/agent.py` picks
+between the two providers above at startup, based on whether
+`ANTHROPIC_API_KEY` is set. Everything else — the tools, the autonomy
+rule, the Telegram interface — is identical either way.
 
 ## What was ported from an existing system, and what's new
 

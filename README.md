@@ -14,7 +14,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/Built%20with-Strands%20Agents-00e6a4" alt="Built with Strands Agents">
-  <img src="https://img.shields.io/badge/tests-10%20passing-brightgreen" alt="10 tests passing">
+  <img src="https://img.shields.io/badge/tests-16%20passing-brightgreen" alt="16 tests passing">
   <a href="https://agentsforhumans.devpost.com"><img src="https://img.shields.io/badge/hackathon-Agents%20for%20Humans-orange" alt="Agents for Humans Hackathon"></a>
 </p>
 
@@ -33,6 +33,7 @@
 - [Disclosure](#disclosure)
 - [Getting started](#getting-started)
 - [Configuration](#configuration)
+- [Trying it out](#trying-it-out)
 - [Testing](#testing)
 - [Project structure](#project-structure)
 - [Out of scope for this submission](#out-of-scope-for-this-submission)
@@ -93,7 +94,8 @@ flowchart LR
     A -- calls --> PT[buy_airtime]
     WT & PT --> WS[(Wallet store)]
     PT --> VT[VtpassClient] --> VP[VTpass API]
-    A -. model calls .-> BR[Amazon Bedrock]
+    A -. model calls, either provider .-> BR[Amazon Bedrock]
+    A -. model calls, either provider .-> AN[Anthropic API]
 ```
 
 ## Disclosure
@@ -113,7 +115,7 @@ ported-vs-new breakdown.
 
 ## Getting started
 
-**Prerequisites:** Python 3.11+, a [Telegram bot token](https://core.telegram.org/bots#how-do-i-create-a-bot) from BotFather, a [VTpass](https://vtpass.com) account, and AWS credentials with Bedrock model access enabled.
+**Prerequisites:** Python 3.11+, a [Telegram bot token](https://core.telegram.org/bots#how-do-i-create-a-bot) from BotFather, a [VTpass](https://vtpass.com) account, and either an [Anthropic API key](https://console.anthropic.com) or AWS credentials with Bedrock model access enabled — Strands is model-agnostic, so either works, see Configuration below.
 
 ```bash
 git clone https://github.com/<your-org>/asap-everyday-agent.git
@@ -128,9 +130,11 @@ cp .env.example .env         # fill in the values, see Configuration below
 python -m src.telegram_bot
 ```
 
-Strands defaults to Amazon Bedrock with Claude as the model provider.
-Enable model access for it once, in the Bedrock console, under whichever
-AWS account `.env`'s credentials point at.
+Strands is model-agnostic (`src/agent.py`'s own `_build_model` picks
+between the two): set `ANTHROPIC_API_KEY` to call Anthropic directly, or
+leave it unset to use Amazon Bedrock via the AWS credentials below
+instead — enable model access for Claude once, in the Bedrock console,
+under whichever AWS account `.env`'s credentials point at.
 
 ## Configuration
 
@@ -143,7 +147,31 @@ All variables live in `.env` (see `.env.example` for the full template).
 | `VTPASS_API_KEY` / `VTPASS_SECRET_KEY` | Yes | A key for **this project**, never a production key from elsewhere |
 | `WALLET_DB_PATH` | No | SQLite file path, defaults to `wallet.db` |
 | `WALLET_SEED_KOBO` | No | Starting balance for a new chat, in kobo. Defaults to ₦5,000 |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes | A dedicated AWS account for this hackathon build |
+| `ANTHROPIC_API_KEY` | No* | Calls Anthropic directly instead of Bedrock — see above |
+| `ANTHROPIC_MODEL_ID` | No | Defaults to `claude-sonnet-5`, only read when the key above is set |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | No* | Only read when `ANTHROPIC_API_KEY` is unset |
+
+\* Exactly one of `ANTHROPIC_API_KEY` or the AWS credentials is required — not both.
+
+## Trying it out
+
+VTpass's sandbox doesn't actually deliver airtime — it reads the phone
+number you send it as an instruction for which canned response to
+return, the same table across MTN, Airtel, Glo and 9mobile:
+
+| Phone number | What it simulates |
+| --- | --- |
+| `08011111111` | Successful purchase |
+| `201000000000` | Pending |
+| `500000000000` | Unexpected response |
+| `400000000000` | No response from the provider |
+| `300000000000` | Timeout |
+| Any other number | Failed |
+
+So *"send 500 naira MTN airtime to 08011111111"* is the message that
+actually shows the whole flow working end to end; a real phone number
+typed in out of habit will hit the "Failed" branch instead, which reads
+as a bug rather than as the sandbox behaving exactly as documented.
 
 ## Testing
 
@@ -151,12 +179,16 @@ All variables live in `.env` (see `.env.example` for the full template).
 pytest -v
 ```
 
-10 tests, covering the wallet store (seed, debit, insufficient funds,
-idempotency, top-up) and the purchase tool (successful buy, insufficient
+16 tests, covering the wallet store (seed, debit, insufficient funds,
+idempotency, top-up), the purchase tool (successful buy, insufficient
 funds short-circuiting before the provider is ever called, an
 unsupported network, and both failure-reversal paths, reversed only
 when VTpass's own response proves nothing was charged, left in place
-otherwise, the same rule the source system's production code enforces).
+otherwise, the same rule the source system's production code enforces),
+the model-provider selection (`ANTHROPIC_API_KEY` set picks Anthropic,
+unset falls back to Bedrock), and the Telegram handler itself (only the
+reply text reaches the chat, never the raw result structure, and the
+typing indicator actually fires).
 
 ## Project structure
 

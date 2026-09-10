@@ -6,10 +6,12 @@ instance would.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from src.agent import build_agent
@@ -34,6 +36,20 @@ def _agent_for(chat_id: str):
     return _agents[chat_id]
 
 
+# Telegram's own "typing..." bubble times out after about five seconds
+# and has to be re-sent to stay up, unlike a spinner the client keeps
+# showing on its own until told to stop.
+_TYPING_REFRESH_SECONDS = 4.0
+
+
+async def _keep_typing(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
+    """Re-send the typing action until cancelled, run as a background task
+    alongside the (blocking) agent call below."""
+    while True:
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        await asyncio.sleep(_TYPING_REFRESH_SECONDS)
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
@@ -50,12 +66,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # via the message itself so the model always has it in context.
     prompt = f"[chat_id={chat_id}] {text}"
 
+    typing_task = asyncio.create_task(_keep_typing(context, update.effective_chat.id))
+
     try:
-        result = agent(prompt)
-        reply = str(result.message) if hasattr(result, "message") else str(result)
+        # Strands' Agent.__call__ is a blocking call, not async -- run
+        # off the event loop so it can't stall every other chat's
+        # messages while one turn (a tool call, a slow model response)
+        # is still working, and so the typing task above actually gets
+        # to run instead of being starved by the same loop.
+        result = await asyncio.to_thread(agent, prompt)
+        # AgentResult itself has a __str__ that pulls just the text blocks
+        # out of result.message (see strands/agent/agent_result.py) --
+        # str(result.message) instead stringifies the raw message dict,
+        # which is what was actually landing in Telegram: the whole
+        # {'role': ..., 'content': [...], 'metadata': {...}} structure,
+        # readable to nobody. .strip() drops the trailing newline
+        # __str__ leaves after its last text block.
+        reply = str(result).strip()
     except Exception:  # noqa: BLE001 - a broken turn should still answer, not vanish
         logger.exception("Agent turn failed", extra={"chat_id": chat_id})
         reply = "Something went wrong on my end. Try that again in a moment."
+    finally:
+        typing_task.cancel()
 
     await update.message.reply_text(reply)
 
