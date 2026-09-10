@@ -19,7 +19,11 @@ def check_wallet_balance(chat_id: str) -> dict:
     """Check the user's current wallet balance.
 
     Call this before attempting any purchase, or whenever the user asks
-    how much they have.
+    how much they have -- every single time, even if you already called
+    it earlier in this same conversation, even if you already told the
+    user a number a moment ago. A purchase changes the balance, and a
+    figure you said earlier in the chat is not proof of what it is now.
+    Never answer a balance question from memory.
 
     Args:
         chat_id: The Telegram chat id this wallet belongs to.

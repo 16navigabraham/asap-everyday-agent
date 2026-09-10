@@ -10,7 +10,8 @@ agent runs at all.
 from strands.models import BedrockModel
 from strands.models.anthropic import AnthropicModel
 
-from src.agent import _build_model
+from src.agent import SYSTEM_PROMPT, _build_model
+from src.tools.wallet import check_wallet_balance
 
 
 def test_anthropic_key_set_picks_the_anthropic_provider(monkeypatch):
@@ -48,3 +49,20 @@ def test_model_id_is_configurable_via_env(monkeypatch):
         assert model.config["model_id"] == "claude-haiku-4-5-20251001"
     finally:
         importlib.reload(agent_module)
+
+
+def test_the_agent_is_told_never_to_answer_a_balance_question_from_memory():
+    # Caught live: a stale balance number from earlier in the same chat
+    # is a real risk with an agent that carries its own conversation
+    # history (Strands keeps it in-process per chat, see
+    # telegram_bot.py's own header) -- nothing stops the model reusing a
+    # figure it already said instead of calling the tool again. The
+    # purchase path itself was never actually at risk (store.debit()
+    # checks the real balance regardless of what the model believes),
+    # but what it *says* was.
+    assert "never" in SYSTEM_PROMPT.lower()
+    assert "fresh" in SYSTEM_PROMPT.lower()
+
+    doc = (check_wallet_balance.__doc__ or "").lower()
+    assert "even if you already" in doc
+    assert "memory" in doc
