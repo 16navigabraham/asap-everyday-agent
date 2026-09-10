@@ -98,20 +98,61 @@ def test_a_failure_vtpass_does_not_prove_uncharged_leaves_the_debit_in_place():
     assert store.balance_kobo("chat-e") == starting - 50_000  # NOT reversed
 
 
-def test_provider_unreachable_is_reported_as_reversed():
-    # A caught-live bug: the agent once described this outcome as
-    # "pending" when the tool never returned pending at all, this is
-    # what the unreachable path actually hands back to it.
+def test_unsupported_network_reason_still_reverses_unconditionally():
+    # Rejected before any HTTP call went out, nothing to requery.
     starting = store.balance_kobo("chat-f")
-    unreachable = PurchaseResult(ok=False, request_id="req-4", reason="unreachable:timeout")
+    never_sent = PurchaseResult(ok=False, request_id="req-4", reason="unsupported_network:visafone")
 
-    with patch.object(purchase._client, "pay", return_value=unreachable):
+    with patch.object(purchase._client, "pay", return_value=never_sent):
         result = purchase.buy_airtime(chat_id="chat-f", network="mtn", phone="08012345678", amount_naira=500)
 
     assert result["ok"] is False
     assert result["reversed"] is True
-    assert "pending" not in result
     assert store.balance_kobo("chat-f") == starting
+
+
+def test_a_timeout_is_checked_with_requery_before_reversing():
+    """Caught live: a read timeout was being treated as proof nothing was
+    charged and reversed immediately. It isn't proof, the request may
+    have kept processing after the client gave up waiting, so a timeout
+    now gets checked against VTpass's own record via requery() before
+    anything is decided.
+    """
+    starting = store.balance_kobo("chat-g")
+    timed_out = PurchaseResult(ok=False, request_id="req-5", reason="unreachable:ReadTimeout")
+    confirmed_delivered = PurchaseResult(
+        ok=True,
+        request_id="req-5",
+        code="000",
+        status="delivered",
+        transaction_id="vtpass-tx-999",
+        decision=Decision(code="000", delivered=True),
+    )
+
+    with patch.object(purchase._client, "pay", return_value=timed_out), \
+         patch.object(purchase._client, "requery", return_value=confirmed_delivered) as mock_requery:
+        result = purchase.buy_airtime(chat_id="chat-g", network="mtn", phone="08012345678", amount_naira=500)
+
+    mock_requery.assert_called_once()
+    assert result["ok"] is True
+    assert result["transaction_id"] == "vtpass-tx-999"
+    assert store.balance_kobo("chat-g") == starting - 50_000  # correctly stayed debited
+
+
+def test_a_timeout_that_requery_also_cannot_confirm_stays_debited_for_review():
+    starting = store.balance_kobo("chat-h")
+    timed_out = PurchaseResult(ok=False, request_id="req-6", reason="unreachable:ReadTimeout")
+    also_unreachable = PurchaseResult(ok=False, request_id="req-6", reason="unreachable:ReadTimeout")
+
+    with patch.object(purchase._client, "pay", return_value=timed_out), \
+         patch.object(purchase._client, "requery", return_value=also_unreachable):
+        result = purchase.buy_airtime(chat_id="chat-h", network="mtn", phone="08012345678", amount_naira=500)
+
+    assert result["ok"] is False
+    assert result["reason"] == "provider_unconfirmed"
+    assert result["needs_review"] is True
+    assert result["reversed"] is False
+    assert store.balance_kobo("chat-h") == starting - 50_000  # left debited, never guessed uncharged
 
 
 def test_buy_airtime_docstring_forbids_inventing_a_status_the_tool_did_not_return():

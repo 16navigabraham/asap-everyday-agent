@@ -68,6 +68,11 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
       been debited" when reversed is False.
     - ok is False and reason is insufficient_funds: state the shortfall
       from shortfall_naira, do not attempt the purchase.
+    - ok is False and reason is provider_unconfirmed: the request timed
+      out and VTpass's own record couldn't be checked either, tell the
+      user plainly that this is unresolved and money may be held, do
+      not call it "pending" (that implies a known in-progress status)
+      or "reversed" (nothing was put back).
 
     Args:
         chat_id: The Telegram chat id whose wallet gets debited.
@@ -97,13 +102,36 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
     )
 
     if not result.ok:
-        # Never reached VTpass at all (bad network, unconfigured client,
-        # unsupported network name), nothing to prove was uncharged
-        # because nothing was ever charged. Safe to reverse outright.
-        store.fund(chat_id, amount_kobo)
-        return {"ok": False, "reason": result.reason or "provider_unreachable", "reversed": True}
+        reason = result.reason or "provider_unreachable"
+        if not reason.startswith("unreachable:"):
+            # Never reached VTpass at all: bad network name or an
+            # unconfigured client, rejected before any HTTP call went
+            # out. Nothing to prove was uncharged because nothing was
+            # ever sent. Safe to reverse outright.
+            store.fund(chat_id, amount_kobo)
+            return {"ok": False, "reason": reason, "reversed": True}
 
-    decision = result.decision
+        # A request WAS sent, we just stopped waiting for the response.
+        # VTpass may well have kept processing it after our client gave
+        # up, so a timeout is not proof nothing was charged, the same
+        # trap the module docstring's `091` note warns about. Ask
+        # VTpass's own record of this request_id before deciding
+        # anything, rather than guessing it must be safe to reverse.
+        requery = _client.requery(request_id)
+        if requery.ok and requery.decision:
+            result, decision = requery, requery.decision
+        else:
+            # Couldn't confirm either way: leave the debit in place for
+            # manual review, never reverse on a guess.
+            return {
+                "ok": False,
+                "reason": "provider_unconfirmed",
+                "needs_review": True,
+                "reversed": False,
+                "new_balance_naira": new_balance / 100,
+            }
+    else:
+        decision = result.decision
 
     if decision and decision.delivered:
         return {
