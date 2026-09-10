@@ -15,6 +15,7 @@ from telegram.constants import ChatAction
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from src.agent import build_agent
+from src.tools import purchase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("asap-agent-telegram")
@@ -89,7 +90,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     finally:
         typing_task.cancel()
 
-    await update.message.reply_text(reply)
+    # Popped after the turn regardless of outcome text, buy_airtime only
+    # ever sets this on a confirmed delivered purchase for this chat.
+    receipt_path = purchase.pop_receipt(chat_id)
+    if receipt_path:
+        with open(receipt_path, "rb") as receipt_file:
+            await update.message.reply_photo(photo=receipt_file, caption=reply)
+    else:
+        await update.message.reply_text(reply)
 
 
 def main() -> None:

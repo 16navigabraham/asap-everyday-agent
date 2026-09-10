@@ -6,3 +6,4 @@ venv/
 wallet.db
 *.egg-info/
 .pytest_cache/
+receipts/

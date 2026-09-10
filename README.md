@@ -14,7 +14,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/Built%20with-Strands%20Agents-00e6a4" alt="Built with Strands Agents">
-  <img src="https://img.shields.io/badge/tests-24%20passing-brightgreen" alt="24 tests passing">
+  <img src="https://img.shields.io/badge/tests-28%20passing-brightgreen" alt="28 tests passing">
   <a href="https://agentsforhumans.devpost.com"><img src="https://img.shields.io/badge/hackathon-Agents%20for%20Humans-orange" alt="Agents for Humans Hackathon"></a>
 </p>
 
@@ -57,6 +57,13 @@ This is a **working integration**, not a mock: purchases go through
 [VTpass](https://vtpass.com), a real Nigerian billing aggregator, with
 its full response-code handling ported faithfully, including the trap
 where VTpass's `000` response code means "accepted," not "delivered."
+
+A "pending" result gets actively re-checked against VTpass's own record
+for a few seconds before it's ever reported as pending, sandbox
+purchases often settle within that window, so a confirmed outcome
+lands more often than a vague one. A confirmed purchase arrives with a
+branded receipt image alongside the confirmation text, not just a line
+of text saying it worked.
 
 ## Who it's for
 
@@ -185,15 +192,17 @@ as a bug rather than as the sandbox behaving exactly as documented.
 pytest -v
 ```
 
-24 tests, covering the wallet store (seed, debit, insufficient funds,
+28 tests, covering the wallet store (seed, debit, insufficient funds,
 idempotency, top-up), the purchase tool (successful buy, insufficient
 funds short-circuiting before the provider is ever called, an
 unsupported network, both failure-reversal paths, reversed only
 when VTpass's own response proves nothing was charged, left in place
 otherwise, a timed-out request or an unrecognized failure code checked
 against VTpass's own record via `requery()` before anything is decided
-rather than assumed, plus the `reversed` field and the docstring
-guardrail that stop the agent from narrating a status the tool never
+rather than assumed, a pending result polled until it resolves or the
+attempts run out, and the receipt image getting stashed for a delivered
+purchase, plus the `reversed` field and the docstring guardrail that
+stop the agent from narrating a status the tool never
 returned), the model-provider selection (`ANTHROPIC_API_KEY` set picks Anthropic,
 unset falls back to Bedrock), and the Telegram handler itself (only the
 reply text reaches the chat, never the raw result structure, and the
@@ -206,6 +215,7 @@ asap-everyday-agent/
 ├── src/
 │   ├── agent.py              # the Strands Agent + system prompt (autonomy rule)
 │   ├── telegram_bot.py        # Telegram interface, per-chat agent instances
+│   ├── receipts.py             # branded receipt image for a delivered purchase
 │   ├── tools/
 │   │   ├── wallet.py           # check_wallet_balance tool
 │   │   └── purchase.py         # buy_airtime tool
@@ -213,6 +223,8 @@ asap-everyday-agent/
 │   │   └── vtpass.py           # ported VTpass client
 │   └── wallet/
 │       └── store.py            # standalone SQLite demo wallet
+├── assets/
+│   └── fonts/                  # bundled DejaVu Sans, for a legible receipt everywhere
 ├── tests/
 │   ├── test_wallet_store.py
 │   └── test_buy_airtime.py

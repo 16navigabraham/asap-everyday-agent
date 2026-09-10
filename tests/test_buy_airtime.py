@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
+from src import receipts
 from src.providers.vtpass import Decision, PurchaseResult
 from src.tools import purchase
 from src.wallet import store
@@ -10,6 +11,8 @@ from src.wallet import store
 @pytest.fixture(autouse=True)
 def _fresh_db(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DB_PATH", str(tmp_path / "wallet.db"))
+    monkeypatch.setattr(receipts, "RECEIPTS_DIR", tmp_path / "receipts")
+    monkeypatch.setattr(purchase, "_PENDING_POLL_INTERVAL_SECONDS", 0)
     yield
 
 
@@ -33,6 +36,24 @@ def test_successful_purchase_debits_the_wallet_and_confirms():
     assert result["ok"] is True
     assert result["transaction_id"] == "vtpass-tx-123"
     assert store.balance_kobo("chat-a") == starting - 50_000  # NGN 500 in kobo
+
+
+def test_a_delivered_purchase_stashes_a_receipt_for_the_chat():
+    with patch.object(purchase._client, "pay", return_value=_delivered("req-1")):
+        purchase.buy_airtime(chat_id="chat-a", network="mtn", phone="08012345678", amount_naira=500)
+
+    path = purchase.pop_receipt("chat-a")
+    assert path is not None
+    assert path.endswith(".png")
+    from pathlib import Path
+
+    assert Path(path).exists()
+    # popped once, gone the second time
+    assert purchase.pop_receipt("chat-a") is None
+
+
+def test_pop_receipt_is_none_when_nothing_was_stashed():
+    assert purchase.pop_receipt("no-such-chat") is None
 
 
 def test_insufficient_funds_is_reported_without_calling_the_provider():
@@ -208,6 +229,45 @@ def test_a_recognized_failure_code_is_not_requeried():
     assert result["ok"] is False
     assert result["needs_review"] is True
     assert store.balance_kobo("chat-j") == starting - 50_000
+
+
+def test_a_pending_purchase_is_polled_and_resolves_to_delivered():
+    """Reported live: a "pending" reply left a reviewer unsure whether
+    the purchase actually went through. buy_airtime now re-checks a
+    pending result a few times before reporting it as pending at all.
+    """
+    pending = PurchaseResult(ok=True, request_id="req-9", code="099", decision=Decision(code="099", pending=True))
+    now_delivered = PurchaseResult(
+        ok=True,
+        request_id="req-9",
+        code="000",
+        status="delivered",
+        transaction_id="vtpass-tx-555",
+        decision=Decision(code="000", delivered=True),
+    )
+
+    with patch.object(purchase._client, "pay", return_value=pending), \
+         patch.object(purchase._client, "requery", return_value=now_delivered) as mock_requery:
+        result = purchase.buy_airtime(chat_id="chat-k", network="mtn", phone="08012345678", amount_naira=500)
+
+    mock_requery.assert_called_once()
+    assert result["ok"] is True
+    assert "pending" not in result
+    assert result["transaction_id"] == "vtpass-tx-555"
+    assert purchase.pop_receipt("chat-k") is not None
+
+
+def test_a_purchase_still_pending_after_polling_is_reported_pending():
+    pending = PurchaseResult(ok=True, request_id="req-10", code="099", decision=Decision(code="099", pending=True))
+
+    with patch.object(purchase._client, "pay", return_value=pending), \
+         patch.object(purchase._client, "requery", return_value=pending) as mock_requery:
+        result = purchase.buy_airtime(chat_id="chat-l", network="mtn", phone="08012345678", amount_naira=500)
+
+    assert mock_requery.call_count == purchase._PENDING_POLL_ATTEMPTS
+    assert result["ok"] is True
+    assert result["pending"] is True
+    assert purchase.pop_receipt("chat-l") is None
 
 
 def test_buy_airtime_docstring_forbids_inventing_a_status_the_tool_did_not_return():

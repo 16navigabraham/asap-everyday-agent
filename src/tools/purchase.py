@@ -17,11 +17,13 @@ encodes.
 from __future__ import annotations
 
 import hashlib
+import time
 from datetime import datetime, timezone
 
 from strands import tool
 
 from src.providers.vtpass import VtpassClient, request_id_for
+from src.receipts import render as render_receipt
 from src.wallet import store
 
 _client = VtpassClient()
@@ -30,6 +32,24 @@ _client = VtpassClient()
 # VTpass's. Kept separate from what VTpass actually charges (costKobo on
 # the response) so the two are never confused with each other.
 PLATFORM_FEE_KOBO = 0
+
+# How long to actually wait for a "pending" purchase to resolve before
+# reporting it as pending. VTpass's sandbox often settles within a few
+# seconds of the initial call, seen live, so a short poll here turns
+# what would otherwise read as a stuck or broken purchase into a clean
+# confirmed outcome most of the time.
+_PENDING_POLL_ATTEMPTS = 4
+_PENDING_POLL_INTERVAL_SECONDS = 3.0
+
+# chat_id -> receipt image path, for the most recent delivered purchase.
+# Deliberately not part of the tool's return value: a server file path
+# is not something to hand the model to narrate, telegram_bot.py pops
+# this directly after a turn to attach the image to the reply.
+_pending_receipts: dict[str, str] = {}
+
+
+def pop_receipt(chat_id: str) -> str | None:
+    return _pending_receipts.pop(chat_id, None)
 
 
 def _reference(chat_id: str, network: str, phone: str, amount_naira: float) -> str:
@@ -56,9 +76,11 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
     never a status it didn't return. Specifically:
     - ok is True and pending is missing or False: it succeeded, say so
       plainly with the transaction_id.
-    - ok is True and pending is True: it is genuinely still processing.
-      This is the only case where "pending" is the right word. The debit
-      stands, say so.
+    - ok is True and pending is True: still processing after this tool
+      already waited and re-checked for it to resolve, so it is
+      genuinely, not just momentarily, still in progress. This is the
+      only case where "pending" is the right word. The debit stands,
+      say so.
     - ok is False and reversed is True: it was declined and the debit
       was put back, the user was not charged. Never call this "pending",
       it is a failure that has already been undone.
@@ -148,20 +170,45 @@ def buy_airtime(chat_id: str, network: str, phone: str, amount_naira: float) -> 
         if requeried.ok and requeried.decision:
             result, decision = requeried, requeried.decision
 
+    if decision and decision.pending:
+        # Give VTpass a real chance to settle before reporting this as
+        # pending at all, seen live to resolve within a few seconds of
+        # the initial call. The debit already stands either way, this
+        # only affects what gets said, never whether money moved.
+        for _ in range(_PENDING_POLL_ATTEMPTS):
+            time.sleep(_PENDING_POLL_INTERVAL_SECONDS)
+            requeried = _client.requery(request_id)
+            if requeried.ok and requeried.decision and not requeried.decision.pending:
+                result, decision = requeried, requeried.decision
+                break
+
     if decision and decision.delivered:
+        new_balance_naira = new_balance / 100
+        try:
+            # Cosmetic only: a rendering problem must never take down a
+            # confirmed purchase's own confirmation.
+            _pending_receipts[chat_id] = render_receipt(
+                network=network,
+                phone=phone,
+                amount_naira=amount_naira,
+                transaction_id=result.transaction_id or request_id,
+                new_balance_naira=new_balance_naira,
+            )
+        except Exception:
+            pass
         return {
             "ok": True,
             "transaction_id": result.transaction_id,
             "amount_naira": amount_naira,
             "network": network,
             "phone": phone,
-            "new_balance_naira": new_balance / 100,
+            "new_balance_naira": new_balance_naira,
         }
 
     if decision and decision.pending:
-        # Accepted but not yet confirmed delivered: the debit stands
-        # (money genuinely left, VTpass is processing), told to the user
-        # as in-progress rather than either "done" or "failed".
+        # Still pending even after polling: the debit stands (money
+        # genuinely left, VTpass is processing), told to the user as
+        # in-progress rather than either "done" or "failed".
         return {
             "ok": True,
             "pending": True,
