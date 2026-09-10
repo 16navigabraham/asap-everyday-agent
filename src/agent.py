@@ -10,9 +10,12 @@ is not.
 
 from __future__ import annotations
 
+import os
+
 from botocore.config import Config
 from strands import Agent
 from strands.models import BedrockModel
+from strands.models.anthropic import AnthropicModel
 
 from src.tools.purchase import buy_airtime
 from src.tools.wallet import check_wallet_balance
@@ -25,6 +28,16 @@ _BEDROCK_CLIENT_CONFIG = Config(
     read_timeout=30,
     retries={"max_attempts": 2, "mode": "standard"},
 )
+
+# Strands is model-agnostic by design ("bring any model, swap freely" —
+# the hackathon's own Agent Speedrun session covers this, and its FAQ is
+# explicit that eligibility never depended on Bedrock specifically: "Do
+# you have to use Nova Pro or a specific model? No — use whatever model
+# you want."). ANTHROPIC_API_KEY set means the IAM side of Bedrock isn't
+# blocking a submission that otherwise works end to end; unset, this
+# falls back to Bedrock exactly as before, so nothing breaks for whoever
+# does have model access sorted.
+_ANTHROPIC_MODEL_ID = os.environ.get("ANTHROPIC_MODEL_ID", "claude-sonnet-5")
 
 SYSTEM_PROMPT = """\
 You handle airtime top-ups for people over chat, so they don't have to \
@@ -54,9 +67,24 @@ scope for this agent. Say so plainly if asked for anything else \
 """
 
 
+def _build_model():
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        return AnthropicModel(
+            client_args={"api_key": anthropic_key},
+            model_id=_ANTHROPIC_MODEL_ID,
+            # Required by AnthropicModel's own config, not optional the
+            # way it is on some providers — this agent's replies are a
+            # short confirmation or one clarifying question, never a long
+            # generation, so there's no reason for this to be large.
+            max_tokens=1024,
+        )
+    return BedrockModel(boto_client_config=_BEDROCK_CLIENT_CONFIG)
+
+
 def build_agent() -> Agent:
     return Agent(
-        model=BedrockModel(boto_client_config=_BEDROCK_CLIENT_CONFIG),
+        model=_build_model(),
         tools=[check_wallet_balance, buy_airtime],
         system_prompt=SYSTEM_PROMPT,
     )
