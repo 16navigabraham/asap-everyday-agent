@@ -131,7 +131,7 @@ ported-vs-new breakdown.
 **Prerequisites:** Python 3.11+, a [Telegram bot token](https://core.telegram.org/bots#how-do-i-create-a-bot) from BotFather, a [VTpass](https://vtpass.com) account, and either an [Anthropic API key](https://console.anthropic.com) or AWS credentials with Bedrock model access enabled — Strands is model-agnostic, so either works, see Configuration below.
 
 ```bash
-git clone https://github.com/<your-org>/asap-everyday-agent.git
+git clone https://github.com/16navigabraham/asap-everyday-agent.git
 cd asap-everyday-agent
 
 python -m venv .venv
