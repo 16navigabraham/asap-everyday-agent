@@ -5,10 +5,11 @@ const crypto = require("node:crypto");
 const config = require("../config");
 const logger = require("../log");
 const notify = require("../notify");
+const muse = require("../model/muse");
 const { handleMessage } = require("../conversations");
 
 /**
- * WhatsApp, through Meta's WhatsApp Cloud API.
+ * WhatsApp, through Meta's WhatsApp Cloud API: text, voice notes and photos.
  *
  *   GET  /whatsapp/webhook  Meta's subscription handshake (hub.verify_token)
  *   POST /whatsapp/webhook  message delivery, signed with the app secret
@@ -20,11 +21,16 @@ const { handleMessage } = require("../conversations");
  */
 
 const MAX_PHOTO_BYTES = 3.5 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 const MAX_TEXT = 4000;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 // Swappable in tests.
-const deps = { fetch: (...args) => fetch(...args), call: undefined };
+const deps = {
+  fetch: (...args) => fetch(...args),
+  call: undefined,
+  voiceNote: (bytes, mimeType) => muse.voiceNoteContent(bytes, mimeType),
+};
 
 const isConfigured = () => {
   const w = config.whatsapp;
@@ -66,18 +72,30 @@ function markReadAndTyping(messageId) {
   }).catch(() => {});
 }
 
-/** Fetch a sent photo through the Graph API and return it as an image block. */
-async function photoBlock(mediaId) {
+/** Download sent media through the Graph API: { bytes, mimeType }, or null. */
+async function downloadMedia(mediaId, { accept, maxBytes }) {
   const metaRes = await deps.fetch(graph(mediaId), { headers: auth(), signal: AbortSignal.timeout(15_000) });
   if (!metaRes.ok) return null;
   const media = await metaRes.json();
-  if (!IMAGE_TYPES.has(media.mime_type) || Number(media.file_size) > MAX_PHOTO_BYTES) return null;
+  const mimeType = String(media.mime_type || "").split(";")[0].trim();
+  if (!accept(mimeType) || Number(media.file_size) > maxBytes) return null;
 
   const file = await deps.fetch(media.url, { headers: auth(), signal: AbortSignal.timeout(30_000) });
   if (!file.ok) return null;
   const bytes = Buffer.from(await file.arrayBuffer());
-  if (bytes.length > MAX_PHOTO_BYTES) return null;
-  return { type: "image", source: { type: "base64", media_type: media.mime_type, data: bytes.toString("base64") } };
+  return bytes.length > maxBytes ? null : { bytes, mimeType };
+}
+
+async function photoBlock(mediaId) {
+  const media = await downloadMedia(mediaId, { accept: (t) => IMAGE_TYPES.has(t), maxBytes: MAX_PHOTO_BYTES });
+  if (!media) return null;
+  return { type: "image", source: { type: "base64", media_type: media.mimeType, data: media.bytes.toString("base64") } };
+}
+
+async function voiceContent(mediaId) {
+  const media = await downloadMedia(mediaId, { accept: (t) => t.startsWith("audio/"), maxBytes: MAX_AUDIO_BYTES });
+  if (!media) return "[The user sent a voice note that could not be downloaded. Ask them to send it again or type it.]";
+  return deps.voiceNote(media.bytes, media.mimeType);
 }
 
 /** Constant-time check of X-Hub-Signature-256 over the raw body. Fails closed. */
@@ -113,9 +131,14 @@ async function handleIncoming(message) {
   if (!message?.id || !message.from || !firstTime(message.id)) return;
   const from = message.from;
 
+  const supported = ["text", "image", "audio"].includes(message.type);
+  if (supported) markReadAndTyping(message.id);
+
   let content;
   if (message.type === "text") {
     content = String(message.text?.body || "").slice(0, 1000);
+  } else if (message.type === "audio") {
+    content = await voiceContent(message.audio?.id).catch(() => "[The user sent a voice note that could not be heard. Ask them to send it again or type it.]");
   } else if (message.type === "image") {
     const caption = String(message.image?.caption || "").slice(0, 1000);
     const image = await photoBlock(message.image?.id).catch(() => null);
@@ -123,12 +146,11 @@ async function handleIncoming(message) {
       ? [image, { type: "text", text: caption || "(The user sent this photo without a caption.)" }]
       : `${caption}\n(The user sent a photo that could not be read. Ask them to type the details.)`.trim();
   } else {
-    await sendText(from, "I can read text and photos for now. Type what you need, or send a photo of the bill or meter.");
+    await sendText(from, "Send me a text, a voice note or a photo of the bill or meter, and I'll take it from there.");
     return;
   }
   if (!content) return;
 
-  markReadAndTyping(message.id);
   const { reply, attachments } = await handleMessage(`wa:${from}`, content, { call: deps.call });
   await sendText(from, reply);
   for (const attachment of attachments) await sendText(from, `📷 ${attachment.caption}`);

@@ -3,6 +3,7 @@
 const config = require("../config");
 const logger = require("../log");
 const notify = require("../notify");
+const muse = require("../model/muse");
 const { handleMessage } = require("../conversations");
 
 /**
@@ -40,13 +41,30 @@ async function photoBlock(photos) {
   return { type: "image", source: { type: "base64", media_type: "image/jpeg", data: bytes.toString("base64") } };
 }
 
+const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+
+/** A Telegram voice note (or audio file), transcribed by Muse Spark. */
+async function voiceContent(voice) {
+  const unheard = "[The user sent a voice note that could not be downloaded. Ask them to send it again or type it.]";
+  if (voice.file_size && voice.file_size > MAX_AUDIO_BYTES) return unheard;
+  const file = await call("getFile", { file_id: voice.file_id });
+  const res = await fetch(`https://api.telegram.org/file/bot${config.telegramToken}/${file.file_path}`, {
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) return unheard;
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.length > MAX_AUDIO_BYTES) return unheard;
+  return muse.voiceNoteContent(bytes, voice.mime_type || "audio/ogg");
+}
+
 async function handleUpdate(update) {
   const message = update.message;
   if (!message) return;
   const text = message.text || message.caption || "";
   const isStart = text.startsWith("/start");
+  const voice = message.voice || message.audio;
   if (text.startsWith("/") && !isStart) return;
-  if (!text && !message.photo) return;
+  if (!text && !message.photo && !voice) return;
 
   const chatId = message.chat.id;
   const typing = setInterval(() => call("sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {}), 4000);
@@ -54,7 +72,9 @@ async function handleUpdate(update) {
 
   try {
     let content = isStart ? "Hi" : text.slice(0, 1000);
-    if (message.photo) {
+    if (voice) {
+      content = await voiceContent(voice).catch(() => "[The user sent a voice note that could not be heard. Ask them to send it again or type it.]");
+    } else if (message.photo) {
       const image = await photoBlock(message.photo).catch(() => null);
       content = image
         ? [image, { type: "text", text: content || "(The user sent this photo without a caption.)" }]

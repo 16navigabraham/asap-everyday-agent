@@ -8,7 +8,11 @@ const notify = require("../notify");
 const sandbox = require("../fulfilment/sandbox");
 const whatsapp = require("./whatsapp");
 const mcp = require("./mcp");
+const muse = require("../model/muse");
 const { handleMessage } = require("../conversations");
+
+// Swappable in tests.
+const deps = { call: undefined, voiceNote: (bytes, mimeType) => muse.voiceNoteContent(bytes, mimeType) };
 
 /**
  * The HTTP API: a chat endpoint (text and optional photo), a poll endpoint
@@ -103,6 +107,18 @@ function checkImage(image) {
   return null;
 }
 
+const AUDIO_TYPES = new Set(["audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav", "audio/webm", "audio/aac", "audio/amr"]);
+const MAX_AUDIO_BYTES = 3.5 * 1024 * 1024;
+
+function checkAudio(audio) {
+  if (audio === undefined || audio === null) return null;
+  const type = typeof audio === "object" ? String(audio.mediaType || "").split(";")[0] : "";
+  if (!AUDIO_TYPES.has(type) || typeof audio.data !== "string") return "bad_audio";
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(audio.data)) return "bad_audio";
+  if ((audio.data.length * 3) / 4 > MAX_AUDIO_BYTES) return "audio_too_large";
+  return null;
+}
+
 async function route(req, res) {
   const url = new URL(req.url, "http://localhost");
   const client = req.socket.remoteAddress || "unknown";
@@ -122,7 +138,7 @@ async function route(req, res) {
         telegram: Boolean(config.telegramToken),
       },
       endpoints: {
-        "POST /api/chat": "{ sessionId, text, image?: { mediaType, data(base64) } } -> { reply, attachments }",
+        "POST /api/chat": "{ sessionId, text, image?: { mediaType, data(base64) }, audio?: { mediaType, data(base64) } } -> { reply, attachments }",
         "GET /api/updates?sessionId=": "delivery notifications since the last poll",
         "POST /mcp": "MCP server (Streamable HTTP) for Claude, ChatGPT and other AI assistants",
         "GET|POST /whatsapp/webhook": "WhatsApp Cloud API webhook",
@@ -174,12 +190,17 @@ async function route(req, res) {
     const sessionId = String(body.sessionId || "");
     const text = String(body.text || "").trim();
     if (!SESSION.test(sessionId)) return send(res, 400, { error: "bad_session" });
-    if (text.length > MAX_TEXT_CHARS || (!text && !body.image)) return send(res, 400, { error: "bad_text" });
-    const imageProblem = checkImage(body.image);
-    if (imageProblem) return send(res, 400, { error: imageProblem });
+    if (text.length > MAX_TEXT_CHARS || (!text && !body.image && !body.audio)) return send(res, 400, { error: "bad_text" });
+    const mediaProblem = checkImage(body.image) || checkAudio(body.audio);
+    if (mediaProblem) return send(res, 400, { error: mediaProblem });
     if (rateLimited(client)) return send(res, 429, { error: "slow_down" });
 
-    const result = await handleMessage(`web:${sessionId}`, userContent(text, body.image));
+    // A voice note becomes the user's words before the turn: Muse Spark
+    // transcribes it in the language it was spoken.
+    const content = body.audio
+      ? await deps.voiceNote(Buffer.from(body.audio.data, "base64"), body.audio.mediaType)
+      : userContent(text, body.image);
+    const result = await handleMessage(`web:${sessionId}`, content, { call: deps.call });
     return send(res, 200, { reply: result.reply, attachments: result.attachments, model: result.model });
   }
 
@@ -204,4 +225,4 @@ function start(port = config.port) {
   return new Promise((resolve) => server.listen(port, () => resolve(server)));
 }
 
-module.exports = { start, route, userContent };
+module.exports = { start, route, userContent, deps };

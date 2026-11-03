@@ -110,7 +110,35 @@ test("unsupported message types get a short, honest reply without calling Muse",
   whatsapp.deps.call = async () => {
     throw new Error("should not be called");
   };
-  const raw = Buffer.from(payload({ from: "2348031234567", id: "wamid.voice", type: "audio", audio: { id: "a1" } }));
+  const raw = Buffer.from(payload({ from: "2348031234567", id: "wamid.video", type: "video", video: { id: "v1" } }));
   await whatsapp.receive(raw, { "x-hub-signature-256": sign(raw) }).done;
-  assert.match(sentTexts()[0], /text and photos/);
+  assert.match(sentTexts()[0], /voice note/);
+});
+
+test("a voice note is downloaded, transcribed by Muse, and answered like typed words", async () => {
+  whatsapp.deps.fetch = async (url, init = {}) => {
+    graphCalls.push({ url, body: init.body ? JSON.parse(init.body) : null, headers: init.headers });
+    if (url === "https://lookaside.example/voice-1") return { ok: true, arrayBuffer: async () => new TextEncoder().encode("opus").buffer };
+    if (url.endsWith("/voice-1")) return { ok: true, json: async () => ({ url: "https://lookaside.example/voice-1", mime_type: "audio/ogg; codecs=opus", file_size: 4 }) };
+    return { ok: true, json: async () => ({}) };
+  };
+  let heard;
+  whatsapp.deps.voiceNote = async (bytes, mimeType) => {
+    heard = { bytes: bytes.toString(), mimeType };
+    return "[Voice note] Ẹ jọ̀ọ́, ra ₦500 MTN fún 08031234567";
+  };
+  let seen;
+  whatsapp.deps.call = scriptedModel([
+    (messages) => {
+      seen = messages.at(-1).content;
+      return [text("Ṣé ₦500 MTN fún 08031234567 ni? Ẹ fèsì bẹ́ẹ̀ni.")];
+    },
+  ]);
+
+  const raw = Buffer.from(payload({ from: "2348031234567", id: "wamid.voice", type: "audio", audio: { id: "voice-1", voice: true } }));
+  await whatsapp.receive(raw, { "x-hub-signature-256": sign(raw) }).done;
+
+  assert.deepEqual(heard, { bytes: "opus", mimeType: "audio/ogg" });
+  assert.equal(seen, "[Voice note] Ẹ jọ̀ọ́, ra ₦500 MTN fún 08031234567");
+  assert.match(sentTexts().at(-1), /bẹ́ẹ̀ni/);
 });

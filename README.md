@@ -2,12 +2,12 @@
   <img src="docs/assets/icon.svg" width="96" height="96" alt="ASAP icon">
 </p>
 
-<h1 align="center">ASAP Everyday Agent</h1>
+<h1 align="center">ASAP</h1>
 
 <p align="center">
-  An AI agent that runs everyday errands for people in Nigeria, built on <strong>Meta Muse Spark</strong>.
+  <strong>Making AI agents accessible through local languages.</strong>
   <br>
-  Airtime, bills, food, rides and flights, wherever you already chat, and no money moves until you say yes.
+  Send a voice note or a text in Yoruba, Hausa, Igbo, Pidgin or English, and an agent built on <strong>Meta Muse Spark</strong> gets the errand done.
 </p>
 
 <p align="center">
@@ -23,9 +23,17 @@
 
 ## The problem
 
-Daily life in Nigeria runs on a pile of small, separate errands, each with its own app, USSD code or phone call: topping up your mum's line, buying data, paying the light bill before the power goes, renewing GOtv, ordering lunch, booking a ride, paying the driver, getting a flight to Abuja. They're frequent and fiddly, and a single wrong digit on a meter number sends your money to a stranger with no way back.
+AI agents can now do real things: buy, order, book and pay. But almost every agent experience assumes you can comfortably type instructions in English. Across Africa, millions of people live their lives in Yoruba, Hausa, Igbo, Pidgin and hundreds of other languages. Many understand some English but struggle to type a request, explain something complex, or talk to an AI system at all. They aren't short of needs or ideas. The technology just hasn't adapted to the way they speak.
 
-ASAP turns each of these into one message to an agent running on **Meta Muse Spark**. Muse works out what you mean, checks what needs checking (whose meter, which merchant delivers to you, whether that account really belongs to your driver), shows you the total, and only charges you once you say yes. You pay from a prepaid ASAP wallet.
+Language should not be the barrier to AI.
+
+## What ASAP does
+
+ASAP lets people speak naturally, in their own language, on platforms they already use, starting with WhatsApp, and hand everyday tasks to an AI agent. Someone records a voice note in Yoruba asking for rice to be delivered, or types in Hausa to top up a line. **Muse Spark** understands the request in that language, works out the intent, uses ASAP's connected tools and services to carry it out, and answers in the same language.
+
+Every task that costs money follows the same path: Muse checks what needs checking (whose meter, which merchant delivers to you, whether an account really belongs to your driver), shows the total in your language, and only charges your prepaid ASAP wallet once you say yes, in any language.
+
+We want AI that does more than understand and respond: AI that understands people in the languages they naturally speak, and takes meaningful action on their behalf.
 
 ## ASAP today
 
@@ -80,6 +88,9 @@ authorization: Bearer $META_API_KEY
 
 What Muse Spark does in this agent:
 
+- **Understands local languages.** Yoruba, Hausa, Igbo, Nigerian Pidgin and English, or a mix in one message. Muse replies in the language the user is using, switches when they switch, and never asks them to use English. Amounts and numbers always stay in digits, and before money moves Muse states the amount and the recipient and waits for a clear yes ("bẹ́ẹ̀ni", "eh", "ee", "toh", "na so", "yes").
+- **Hears voice notes.** A voice note from WhatsApp, Telegram or the API goes to Muse Spark with a strict instruction: transcribe verbatim, keep the language it was spoken in, don't translate, write numbers as digits. The transcript then enters the agent's turn as the user's own words, marked as speech, so Muse repeats back any amount or number it heard and confirms it before quoting. Transcription is a separate call with no tools, so audio can never trigger an action on its own.
+- **Finds products by their local names.** *Ìrẹsì*, *shinkafa* and *osikapa* all find rice, with or without tone marks.
 - **Plans multi-step errands as tool calls.** Paying a light bill is: look up the meter, show the name, wait for a yes, quote, wait for another yes, confirm. A food order is: search, add items, ask for the address, price, confirm. Muse chooses and sequences 29 tools.
 - **Reads photos.** Send a picture of a meter, bill or smartcard and Muse reads the number off it, repeats it back, and uses it once you confirm. The image goes to Muse as an image block in that turn only; history keeps a note instead of the bytes.
 - **Reasons before acting.** Muse Spark always reasons, so the effort is pinned to `low`. Left unbounded, it can spend the whole token budget thinking and return no text.
@@ -128,11 +139,11 @@ curl -s localhost:3000/api/chat -H 'content-type: application/json' \
 curl -s 'localhost:3000/api/updates?sessionId=judge-0001'   # the delivery notification
 ```
 
-To send a photo of a meter or bill, add `"image": {"mediaType": "image/jpeg", "data": "<base64>"}` to the chat body.
+To send a photo of a meter or bill, add `"image": {"mediaType": "image/jpeg", "data": "<base64>"}` to the chat body. To send a voice note, add `"audio": {"mediaType": "audio/ogg", "data": "<base64>"}` instead.
 
 ### Channels
 
-**WhatsApp.** Create an app with the WhatsApp product in the Meta developer dashboard, then set `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and a `WHATSAPP_VERIFY_TOKEN` of your choice. Run `npm start` behind a public HTTPS URL, set the callback URL to `https://<your-host>/whatsapp/webhook` with the same verify token, and subscribe to the `messages` field. Text and photos both work. Every delivery's `X-Hub-Signature-256` is checked against the app secret before anything runs, and Meta's retries of the same message are answered once.
+**WhatsApp.** Create an app with the WhatsApp product in the Meta developer dashboard, then set `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and a `WHATSAPP_VERIFY_TOKEN` of your choice. Run `npm start` behind a public HTTPS URL, set the callback URL to `https://<your-host>/whatsapp/webhook` with the same verify token, and subscribe to the `messages` field. Text, voice notes and photos all work. Every delivery's `X-Hub-Signature-256` is checked against the app secret before anything runs, and Meta's retries of the same message are answered once.
 
 **MCP.** `npm start` serves an MCP server at `/mcp` (Streamable HTTP). In Claude or ChatGPT, add a custom connector with the URL `https://<your-host>/mcp`. For a local check, any MCP client works:
 
@@ -185,7 +196,7 @@ More detail in [docs/architecture.md](docs/architecture.md).
 npm test
 ```
 
-62 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, the WhatsApp webhook (handshake, signature check, retries, photos) and the MCP server (session, tool annotations, a full quote-confirm-deliver run, wallet isolation), same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, wallet top-ups, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
+69 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, voice notes (the Muse transcription request, the audio-format fallback, failure handling, WhatsApp and API voice paths), local-language product search, the WhatsApp webhook (handshake, signature check, retries, photos) and the MCP server (session, tool annotations, a full quote-confirm-deliver run, wallet isolation), same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, wallet top-ups, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
 
 ## Built during the hackathon
 

@@ -18,6 +18,10 @@ module.exports = {
     effort: env.META_REASONING_EFFORT || "low",
     maxTokens: number(env.META_MAX_TOKENS, 2048),
     timeoutMs: number(env.META_TIMEOUT_MS, 45_000),
+    // How a voice note is attached to the Muse request: "source" (a base64
+    // source block, like images) or "input_audio". The other is tried once if
+    // Meta rejects the first.
+    audioFormat: env.META_AUDIO_FORMAT === "input_audio" ? "input_audio" : "source",
   },
 
   telegramToken: env.TELEGRAM_BOT_TOKEN || null,
