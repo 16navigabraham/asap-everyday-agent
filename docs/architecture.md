@@ -1,59 +1,49 @@
 # Architecture
 
-```mermaid
-flowchart LR
-    U[Telegram user] -- message --> B[Telegram Bot\nsrc/telegram_bot.py]
-    B -- per-chat Agent instance --> A[Strands Agent\nsrc/agent.py]
-    A -- system prompt: autonomy rule --> A
-    A -- calls --> WT[check_wallet_balance tool]
-    A -- calls --> PT[buy_airtime tool]
-    WT --> WS[(Wallet store\nSQLite, this repo's own)]
-    PT --> WS
-    PT --> VT[VtpassClient\nsrc/providers/vtpass.py]
-    VT -- HTTPS --> VP[VTpass API\nreal Nigerian billing aggregator]
-    A -. model calls, ANTHROPIC_API_KEY set .-> AN[Anthropic API]
-    A -. model calls, unset .-> BR[Amazon Bedrock\nClaude, via AWS credentials]
+## A turn
+
+1. A message arrives on a channel (web, Telegram, CLI) as `"<channel>:<id>"` plus text.
+2. `conversations.js` takes that user's lock, so two quick messages can't both act on the same quote, and loads their history.
+3. `agent/turn.js` sends the system prompt, the tool definitions and the history to the active model through `model/client.js`.
+4. If the model asks for tools, `agent/executor.js` validates and runs them, and the results go back to the model. This repeats up to six times.
+5. The turn ends with the model's text, or with an `ask_user` question. Every message it produced, including tool calls and results, is appended to history.
+
+Each assistant message is tagged in memory with the provider that wrote it. When the conversation is later sent to a different provider, that provider's foreign thinking blocks are removed, because thinking blocks are signed and only accepted by the model that produced them. The tag itself is stripped before every request.
+
+## Models
+
+`model/providers.js` describes each provider as a base URL, an auth header and a request-shaping function:
+
+| | Muse Spark (default) | Claude (optional) |
+|---|---|---|
+| Endpoint | `https://api.meta.ai/v1/messages` | `https://api.anthropic.com/v1/messages` |
+| Auth | `Authorization: Bearer` | `x-api-key` |
+| Extra | `thinking: adaptive`, `output_config.effort: low` | none |
+
+`model/switch.js` holds the active provider. It is read on every call, so a switch flipped from the web page or the CLI applies to the very next message.
+
+`model/client.js` retries a failed call once on the other provider when the failure is retryable (no response, timeout, 402, 408, 429, 5xx) and the turn hasn't run any tools yet. A 400 is never retried, because the request is malformed and would fail on both providers.
+
+## Orders
+
+```
+quoted ──confirm──> paid ──> fulfilling ──> delivered
+  ├─> expired          └─> refunded    ├─> failed ──> refunded
+  └─> cancelled                        └─> needs_review ──> delivered | refunded
 ```
 
-Strands is model-agnostic: `_build_model()` in `src/agent.py` picks
-between the two providers above at startup, based on whether
-`ANTHROPIC_API_KEY` is set. Everything else — the tools, the autonomy
-rule, the Telegram interface — is identical either way.
+The table lives in `orders/states.js`, and every change goes through `store.move`, which throws on an illegal transition.
 
-## What was ported from an existing system, and what's new
+- **quote:** prices the order, records which turn produced it, and charges nothing.
+- **confirm:** refuses same-turn and other users' orders and expired quotes. It then debits the ledger with reference `order:<id>` and schedules fulfilment off the request path.
+- **fulfil:** delivers, or refunds on a definite decline (reference `refund:<id>`), or parks the order in `needs_review` when the outcome is unknown. Each outcome is sent to the user as a notification on their channel.
 
-The purchase logic here is reimplemented from a production WhatsApp
-money agent the author previously built (JavaScript/Node.js), disclosed
-per this hackathon's rules on incorporating pre-existing work. No
-production credential, database, or user data from that system is used
-anywhere in this repo.
+Quotes expire after `QUOTE_TTL_MINUTES`. An expired quote is marked the moment anything reads it.
 
-| Piece | Source |
-| --- | --- |
-| VTpass response-code classification (`classify()`), the "000 isn't delivered" trap, idempotency handling | Ported from the source system's provider client, reimplemented in Python |
-| Debit-then-pay, reverse-only-when-proven-uncharged purchase safety | Ported from the source system's crash-safety logic, adapted from a queued-job model to a synchronous tool call |
-| Wallet balance / debit / fund, kobo-denominated | New: a standalone SQLite store for this submission, not a connection to any production database |
-| Autonomy rule (system prompt) | New: this is the actual hackathon deliverable, a plain-language rule the model follows, not scattered checks |
-| Telegram bot, per-chat agent instances | New: the chat interface for this submission |
-| Strands `Agent` + `@tool` wiring | New: this submission's actual use of the Strands Agents SDK |
+## Replacing the sandbox
 
-## Why a synchronous tool call instead of a job queue
+`fulfilment/sandbox.js` is the only module that knows about fulfilment. A real provider implements `listPlans`, `findPlan`, `lookupCustomer` and `vend`. `vend` must resolve `{ status: "delivered", reference }` or `{ status: "declined" }`, and throw only when the outcome is genuinely unknown, because a throw routes the order to review rather than to a refund.
 
-The source system's real purchase flow is asynchronous: a job gets
-queued, a worker claims it, and can retry a crashed attempt because the
-request id was recorded before the provider call ever went out. That
-two-process design solves a problem this submission doesn't have:
-there's no separate worker here to crash independently of the tool call
-itself. The purchase tool keeps the part of that design that still
-matters at this scale (a deterministic, idempotent reference so a
-retried tool call can't double-debit) without the queue infrastructure
-that would exist purely to satisfy a judging checklist item rather than
-solve a real problem here.
+## Storage
 
-## Deployment
-
-Runs anywhere Python does. For AWS Bedrock AgentCore deployment (the
-hackathon's suggested path, strengthens the Technical Implementation
-score), see the AWS credentials section in `.env.example`. The agent
-code itself doesn't change between local and AgentCore deployment, only
-how the process gets hosted.
+Wallets, orders and histories are in memory, which is enough for a sandbox demo. The ledger is append-only and idempotent on reference, so moving it to a database means one table with a unique constraint on `(user_id, ref)`.

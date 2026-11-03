@@ -1,9 +1,3 @@
 .env
-__pycache__/
-*.pyc
-.venv/
-venv/
-wallet.db
-*.egg-info/
-.pytest_cache/
-receipts/
+node_modules/
+*.log

@@ -1,246 +1,137 @@
 <p align="center">
-  <img src="docs/assets/icon.svg" width="96" height="96" alt="asap-everyday-agent icon">
+  <img src="docs/assets/icon.svg" width="96" height="96" alt="ASAP icon">
 </p>
 
-<h1 align="center">asap-everyday-agent</h1>
+<h1 align="center">ASAP Everyday Agent</h1>
 
 <p align="center">
-  An agent that buys airtime for you over Telegram. No app, no menu, no confirmation tap.
+  Everyday errands in Nigeria over plain chat, powered by <strong>Meta Muse Spark</strong>.
   <br>
-  It only talks back when there's a real decision to make.
+  Airtime, data, electricity and TV, with no app, no menus, and no money moving until you say yes.
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/Built%20with-Strands%20Agents-00e6a4" alt="Built with Strands Agents">
-  <img src="https://img.shields.io/badge/tests-28%20passing-brightgreen" alt="28 tests passing">
-  <a href="https://agentsforhumans.devpost.com"><img src="https://img.shields.io/badge/hackathon-Agents%20for%20Humans-orange" alt="Agents for Humans Hackathon"></a>
+  <img src="https://img.shields.io/badge/model-Meta%20Muse%20Spark-0866ff" alt="Model: Meta Muse Spark">
+  <img src="https://img.shields.io/badge/node-22%2B-339933" alt="Node 22+">
+  <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
 </p>
 
-<p align="center">
-  Built for AWS's <a href="https://agentsforhumans.devpost.com">Agents for Humans</a> hackathon, Everyday Agents track.
-</p>
-
-<p align="center">
-  <strong><a href="https://t.me/useasap_bot">Try the live demo on Telegram → @useasap_bot</a></strong>
-  <br>
-  <sub>Runs against VTpass's sandbox with a demo wallet, seeded fresh at ₦5,000 per chat, see <a href="#trying-it-out">Trying it out</a> for the test number that shows a full successful purchase.</sub>
-</p>
+<p align="center">Built for the Meta Global AI Developer Hackathon, theme: <em>Build for Your World</em>.</p>
 
 ---
 
-## Table of contents
+## The problem
 
-- [What it does](#what-it-does)
-- [Who it's for](#who-its-for)
-- [How it works](#how-it-works)
-- [Architecture](#architecture)
-- [Disclosure](#disclosure)
-- [Getting started](#getting-started)
-- [Configuration](#configuration)
-- [Trying it out](#trying-it-out)
-- [Testing](#testing)
-- [Project structure](#project-structure)
-- [Out of scope for this submission](#out-of-scope-for-this-submission)
-- [License](#license)
+Paying for everyday things in Nigeria means a different app, menu or USSD code for every errand: topping up your mum's line, buying a data bundle, paying the light bill before NEPA takes the light, renewing GOtv. All of it is small, frequent and fiddly, and a wrong digit on a meter number sends your money to a stranger's account with no way to get it back.
+
+ASAP turns each of these into one chat message: *"Pay ₦3,000 on my Ikeja prepaid meter 45031234567"*. The agent works out what you mean, looks up the account name so you can check it, shows you the total, and only charges you once you say yes.
+
+This repository is the open-source core of ASAP's agent: the model integration, tool layer, money-safety rules and order lifecycle. It runs on its own against a built-in sandbox, so anyone can try it without real money or third-party accounts.
 
 ## What it does
 
-Message the bot: *"send 500 naira MTN airtime to 08012345678."* If the
-details are clear and the wallet can cover it, the airtime is bought
-immediately, no confirmation step, no menu, no app. If the wallet's
-short, it says so and states the exact shortfall instead of guessing.
-If something's ambiguous, it asks exactly one question, not a form.
+| Errand | How it works |
+|---|---|
+| Airtime | MTN, Airtel, Glo, 9mobile, ₦50 to ₦50,000 |
+| Data bundles | Live plan list per network, quoted by plan id |
+| Electricity | Ikeja, Eko, Abuja, Ibadan, Enugu; prepaid gets a 20-digit token |
+| TV | DStv, GOtv, StarTimes, with the account name confirmed first |
+| Wallet | Balance, recent activity with live order status, sandbox top-ups |
 
-This is a **working integration**, not a mock: purchases go through
-[VTpass](https://vtpass.com), a real Nigerian billing aggregator, with
-its full response-code handling ported faithfully, including the trap
-where VTpass's `000` response code means "accepted," not "delivered."
+It works in English and Pidgin, and it asks exactly one question when something is missing instead of guessing.
 
-A "pending" result gets actively re-checked against VTpass's own record
-for a few seconds before it's ever reported as pending, sandbox
-purchases often settle within that window, so a confirmed outcome
-lands more often than a vague one. A confirmed purchase arrives with a
-branded receipt image alongside the confirmation text, not just a line
-of text saying it worked.
+## Meta Muse Spark at the centre
 
-## Who it's for
+Every turn is answered by **Muse Spark** through the **Meta Model API**. Meta's API uses the Messages API wire format, so the agent calls it with plain `fetch` (see [`src/model/providers.js`](src/model/providers.js)):
 
-Anyone who tops up airtime regularly, for themselves or someone else,
-and is tired of the same handful of taps every time: open the app, pick
-a network, type a number, pick an amount, confirm, wait. This collapses
-that to one message, answered the moment it's sent.
+```js
+POST https://api.meta.ai/v1/messages
+authorization: Bearer $META_API_KEY
 
-## How it works
-
-```
-"send 500 naira MTN airtime to 08012345678"
-        │
-        ▼
- check wallet balance
-        │
-   ┌────┴────┐
-   │ funded? │
-   └────┬────┘
-   yes  │  no
-        │
-   ┌────┴──────────────────┐
-   ▼                        ▼
-buy immediately      "you're ₦120 short"
-   │                  (no purchase attempted)
-   ▼
-confirm with tx reference
+{ model: "muse-spark-1.1", system, tools, messages,
+  thinking: { type: "adaptive" }, output_config: { effort: "low" } }
 ```
 
-## Architecture
+Muse Spark plans each errand as a chain of tool calls (look up the meter, show the name, quote, wait, confirm) and reasons before each step. Muse always reasons, so the effort is pinned to `low`; left unbounded, it can spend the whole token budget thinking and return no text.
 
-Full breakdown, including exactly what's ported from an existing
-production system versus built new for this submission, is in
-[`docs/architecture.md`](docs/architecture.md).
+**Live model switch and failover.** Claude can be configured as a second provider. The web page has a Muse Spark / Claude switch (behind an admin token) that takes effect on the very next message, and if a Muse call fails with an outage, rate limit or credit error, that call is retried once on the other provider. Every reply in the UI is labelled with the model that wrote it, failovers included. Failover is only allowed before a turn has run any tools, so two models never split one errand between them.
 
-```mermaid
-flowchart LR
-    U[Telegram user] --> B[Telegram Bot]
-    B -- per-chat Agent --> A[Strands Agent]
-    A -- calls --> WT[check_wallet_balance]
-    A -- calls --> PT[buy_airtime]
-    WT & PT --> WS[(Wallet store)]
-    PT --> VT[VtpassClient] --> VP[VTpass API]
-    A -. model calls, either provider .-> BR[Amazon Bedrock]
-    A -. model calls, either provider .-> AN[Anthropic API]
-```
+## Money safety, enforced in code
 
-## Disclosure
+The model never moves money on its own judgement. Each rule below is enforced by code and covered by a test:
 
-The VTpass response-code handling and purchase-safety rules (the
-`000`-isn't-delivered trap, idempotency, reverse-only-when-proven-
-uncharged) are reimplemented here from a production system the author
-previously built, adapted from JavaScript into a new Python
-implementation on Strands Agents SDK. This is the disclosure this
-hackathon's own rules ask for when pre-existing work is incorporated
-into a submission. No production credential, database, or user data
-from that system is used anywhere in this repo; everything here (the
-agent, its tools, the wallet store, the Telegram interface) is new work
-built for this submission. See
-[`docs/architecture.md`](docs/architecture.md) for the full
-ported-vs-new breakdown.
+1. **Purchase tools only quote.** `buy_airtime`, `buy_data`, `pay_electricity` and `pay_tv` price the request and store an order in `quoted`. Nothing is charged.
+2. **Quote and confirmation can't happen in the same turn.** `confirm_purchase` refuses an order quoted earlier in the same turn, so the user always sees the total before the debit.
+3. **One money action per model response.** If the model asks for two at once, the second is refused.
+4. **Arguments are validated in-process** against each tool's schema plus semantic bounds (amount limits, valid Nigerian numbers, meter formats) before any handler runs.
+5. **An idempotent ledger.** Every debit and refund has a unique reference, so a retried confirmation charges once.
+6. **Refunds need proof of failure.** A provider decline refunds automatically. An unknown outcome (a timeout) holds the money in `needs_review`, because refunding something that might have been delivered pays out twice.
+7. **Failures are reported honestly.** When a tool throws, the model never sees the raw error. It gets a fixed instruction saying the action did not run and must not be described as successful, or, for a failed lookup, that it doesn't know the answer and must say so.
+8. **Bill payments check the account name first.** The prompt requires `lookup_customer` and the user's confirmation of the name before any electricity or TV quote.
 
-## Getting started
-
-**Prerequisites:** Python 3.11+, a [Telegram bot token](https://core.telegram.org/bots#how-do-i-create-a-bot) from BotFather, a [VTpass](https://vtpass.com) account, and either an [Anthropic API key](https://console.anthropic.com) or AWS credentials with Bedrock model access enabled — Strands is model-agnostic, so either works, see Configuration below.
+## Try it
 
 ```bash
 git clone https://github.com/16navigabraham/asap-everyday-agent.git
 cd asap-everyday-agent
-
-python -m venv .venv
-source .venv/bin/activate   # .venv\Scripts\activate on Windows
-
-pip install -r requirements.txt
-cp .env.example .env         # fill in the values, see Configuration below
-
-python -m src.telegram_bot
+cp .env.example .env        # add META_API_KEY
+npm start                   # http://localhost:3000
 ```
 
-Strands is model-agnostic (`src/agent.py`'s own `_build_model` picks
-between the two): set `ANTHROPIC_API_KEY` to call Anthropic directly, or
-leave it unset to use Amazon Bedrock via the AWS credentials below
-instead — enable model access for Claude once, in the Bedrock console,
-under whichever AWS account `.env`'s credentials point at.
+There is nothing to install: it has zero npm dependencies and needs only Node 22+.
 
-## Configuration
+- **Web chat:** `npm start`, then open http://localhost:3000.
+- **Terminal:** `npm run cli`. Type `/model claude` or `/model muse` to switch.
+- **Telegram:** set `TELEGRAM_BOT_TOKEN` and `npm start` serves the bot too.
 
-All variables live in `.env` (see `.env.example` for the full template).
+To enable the live switch on the web page, set both `META_API_KEY` and `ANTHROPIC_API_KEY`, plus an `ADMIN_TOKEN`.
 
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `TELEGRAM_BOT_TOKEN` | Yes | From [@BotFather](https://t.me/BotFather) |
-| `VTPASS_BASE_URL` | Yes | `https://sandbox.vtpass.com` for testing |
-| `VTPASS_API_KEY` / `VTPASS_SECRET_KEY` | Yes | A key for **this project**, never a production key from elsewhere |
-| `WALLET_DB_PATH` | No | SQLite file path, defaults to `wallet.db` |
-| `WALLET_SEED_KOBO` | No | Starting balance for a new chat, in kobo. Defaults to ₦5,000 |
-| `ANTHROPIC_API_KEY` | No* | Calls Anthropic directly instead of Bedrock — see above |
-| `ANTHROPIC_MODEL_ID` | No | Defaults to `claude-sonnet-5`, only read when the key above is set |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | No* | Only read when `ANTHROPIC_API_KEY` is unset |
+### Sandbox numbers
 
-\* Exactly one of `ANTHROPIC_API_KEY` or the AWS credentials is required — not both.
+Every chat starts with ₦5,000 of demo credit. Deliveries are simulated by [`src/fulfilment/sandbox.js`](src/fulfilment/sandbox.js), and the last four digits of a phone, meter or smartcard number trigger the failure paths:
 
-## Trying it out
+| Ends in | Outcome |
+|---|---|
+| anything else | Delivered, with a reference (and a token for prepaid electricity) |
+| `0000` | Account not found on lookup |
+| `9999` | Provider declines, order refunded automatically |
+| `7777` | Provider times out, money held for review, not refunded |
 
-VTpass's sandbox doesn't actually deliver airtime — it reads the phone
-number you send it as an instruction for which canned response to
-return, the same table across MTN, Airtel, Glo and 9mobile:
+A good demo script: ask for your balance, buy ₦500 MTN airtime for `08031234567`, then buy airtime for `08031239999` and watch the refund land in your wallet.
 
-| Phone number | What it simulates |
-| --- | --- |
-| `08011111111` | Successful purchase |
-| `201000000000` | Pending |
-| `500000000000` | Unexpected response |
-| `400000000000` | No response from the provider |
-| `300000000000` | Timeout |
-| Any other number | Failed |
+## Architecture
 
-So *"send 500 naira MTN airtime to 08011111111"* is the message that
-actually shows the whole flow working end to end; a real phone number
-typed in out of habit will hit the "Failed" branch instead, which reads
-as a bug rather than as the sandbox behaving exactly as documented.
+```
+web chat / Telegram / CLI
+          │
+   conversations.js ── per-user history, one turn at a time per user
+          │
+     agent/turn.js ──── model ⇄ tools loop, max 6 steps
+       │        │
+model/client.js  agent/executor.js ── validation, one-money-action rule, timeouts
+ Muse ⇄ Claude          │
+ switch + failover   agent/tools/* ── quote-only purchase tools, reads, confirm
+                        │
+               orders/checkout.js ── quote → confirm (debit) → fulfil → deliver / refund / review
+                │               │
+        wallet/ledger.js   fulfilment/sandbox.js
+```
 
-## Testing
+More detail in [docs/architecture.md](docs/architecture.md).
+
+## Tests
 
 ```bash
-pytest -v
+npm test
 ```
 
-28 tests, covering the wallet store (seed, debit, insufficient funds,
-idempotency, top-up), the purchase tool (successful buy, insufficient
-funds short-circuiting before the provider is ever called, an
-unsupported network, both failure-reversal paths, reversed only
-when VTpass's own response proves nothing was charged, left in place
-otherwise, a timed-out request or an unrecognized failure code checked
-against VTpass's own record via `requery()` before anything is decided
-rather than assumed, a pending result polled until it resolves or the
-attempts run out, and the receipt image getting stashed for a delivered
-purchase, plus the `reversed` field and the docstring guardrail that
-stop the agent from narrating a status the tool never
-returned), the model-provider selection (`ANTHROPIC_API_KEY` set picks Anthropic,
-unset falls back to Bedrock), and the Telegram handler itself (only the
-reply text reaches the chat, never the raw result structure, and the
-typing indicator actually fires).
+34 tests on Node's built-in runner. The model is stubbed and there is no network access: the full purchase lifecycle, same-turn confirmation refusal, double-confirm idempotency, refunds, the review path, cross-user isolation, executor rules, the Muse request shape, the switch, failover, and the HTTP surface.
 
-## Project structure
+## Scope
 
-```
-asap-everyday-agent/
-├── src/
-│   ├── agent.py              # the Strands Agent + system prompt (autonomy rule)
-│   ├── telegram_bot.py        # Telegram interface, per-chat agent instances
-│   ├── receipts.py             # branded receipt image for a delivered purchase
-│   ├── tools/
-│   │   ├── wallet.py           # check_wallet_balance tool
-│   │   └── purchase.py         # buy_airtime tool
-│   ├── providers/
-│   │   └── vtpass.py           # ported VTpass client
-│   └── wallet/
-│       └── store.py            # standalone SQLite demo wallet
-├── assets/
-│   └── fonts/                  # bundled DejaVu Sans, for a legible receipt everywhere
-├── tests/
-│   ├── test_wallet_store.py
-│   └── test_buy_airtime.py
-└── docs/
-    ├── architecture.md
-    └── assets/icon.svg
-```
-
-## Out of scope for this submission
-
-- Data, electricity, and TV purchases: the source system supports all
-  three; only airtime is ported here.
-- WhatsApp integration: Telegram only, for this submission.
-- Real money movement into the wallet: seeded with a demo balance on
-  first use (see [`src/wallet/store.py`](src/wallet/store.py)).
+This is the agent core, not the whole ASAP product. The production service runs on WhatsApp with real payment and fulfilment partners, identity verification and account controls, and these are intentionally not part of this repository. Here fulfilment is simulated, wallets live in memory, and no real money moves.
 
 ## License
 
-[MIT](LICENSE)
+MIT, see [LICENSE](LICENSE).

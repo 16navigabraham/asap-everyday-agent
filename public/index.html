@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASAP Agent</title>
+<meta name="description" content="Everyday errands over chat, powered by Meta Muse Spark.">
+<style>
+  :root {
+    --bg: #f4f5f2; --panel: #ffffff; --ink: #14161a; --muted: #6b7078; --line: #e3e5e0;
+    --brand: #0a7c5a; --brand-ink: #ffffff; --me: #0a7c5a; --me-ink: #ffffff; --them: #eef0ec;
+    --update: #fff6dc; --update-line: #f1dc9a; --warn: #a35a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1113; --panel: #171a1d; --ink: #eceef0; --muted: #9aa0a8; --line: #2a2f34;
+      --brand: #2fbf8f; --brand-ink: #062118; --me: #1f8f6a; --me-ink: #ffffff; --them: #22272b;
+      --update: #2b2716; --update-line: #4d4425; --warn: #f0b35a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1113; --panel: #171a1d; --ink: #eceef0; --muted: #9aa0a8; --line: #2a2f34;
+    --brand: #2fbf8f; --brand-ink: #062118; --me: #1f8f6a; --me-ink: #ffffff; --them: #22272b;
+    --update: #2b2716; --update-line: #4d4425; --warn: #f0b35a;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center;
+  }
+  .app { width: 100%; max-width: 720px; height: 100%; display: flex; flex-direction: column; background: var(--panel); border-inline: 1px solid var(--line); }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-weight: 800; }
+  .title { flex: 1; min-width: 140px; }
+  .title b { display: block; }
+  .title small { color: var(--muted); }
+  .switch { display: flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; }
+  .switch button { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer; }
+  .switch button[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); font-weight: 600; }
+  .switch button:disabled { cursor: not-allowed; opacity: .45; }
+  main { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 82%; padding: 9px 13px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .me { align-self: flex-end; background: var(--me); color: var(--me-ink); border-bottom-right-radius: 4px; }
+  .them { align-self: flex-start; background: var(--them); border-bottom-left-radius: 4px; }
+  .update { align-self: center; background: var(--update); border: 1px solid var(--update-line); font-size: 14px; max-width: 92%; }
+  .by { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }
+  .by.fo { color: var(--warn); }
+  .typing { color: var(--muted); font-style: italic; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 16px 10px; }
+  .chips button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  form { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--line); }
+  input { flex: 1; min-width: 0; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  form button { border: 0; border-radius: 12px; padding: 0 18px; background: var(--brand); color: var(--brand-ink); font: inherit; font-weight: 600; cursor: pointer; }
+  form button:disabled { opacity: .5; }
+  .note { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16px 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo" aria-hidden="true">A</div>
+    <div class="title"><b>ASAP</b><small id="active">Loading model…</small></div>
+    <div class="switch" role="group" aria-label="Model">
+      <button type="button" data-provider="muse">Muse Spark</button>
+      <button type="button" data-provider="claude">Claude</button>
+    </div>
+  </header>
+  <main id="log" aria-live="polite"></main>
+  <div class="chips" id="chips">
+    <button type="button">What's my balance?</button>
+    <button type="button">Buy ₦500 MTN airtime for 08031234567</button>
+    <button type="button">Show me Airtel data plans</button>
+    <button type="button">Pay ₦3,000 on my Ikeja prepaid meter 45031234567</button>
+  </div>
+  <div class="note">Sandbox: demo wallet, simulated deliveries. No real money moves.</div>
+  <form id="form">
+    <input id="text" autocomplete="off" maxlength="1000" placeholder="Tell ASAP what you need…" aria-label="Message">
+    <button id="sendBtn">Send</button>
+  </form>
+</div>
+<script>
+(() => {
+  const log = document.getElementById("log");
+  const form = document.getElementById("form");
+  const input = document.getElementById("text");
+  const sendBtn = document.getElementById("sendBtn");
+  const active = document.getElementById("active");
+  const switches = [...document.querySelectorAll(".switch button")];
+
+  let sessionId;
+  try { sessionId = sessionStorage.getItem("asap-session"); } catch {}
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    try { sessionStorage.setItem("asap-session", sessionId); } catch {}
+  }
+
+  function bubble(kind, text, by, failedOver) {
+    const el = document.createElement("div");
+    el.className = `msg ${kind}`;
+    el.textContent = text;
+    if (by) {
+      const tag = document.createElement("span");
+      tag.className = failedOver ? "by fo" : "by";
+      tag.textContent = failedOver ? `${by} · failover` : by;
+      el.appendChild(tag);
+    }
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  async function send(text) {
+    document.getElementById("chips").hidden = true;
+    bubble("me", text);
+    input.value = "";
+    sendBtn.disabled = true;
+    const typing = bubble("them typing", "ASAP is on it…");
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId, text }),
+      });
+      const data = await res.json();
+      typing.remove();
+      if (!res.ok) {
+        bubble("them", data.error === "slow_down" ? "Too many messages, give it a minute." : "That didn't send. Try again.");
+        return;
+      }
+      bubble("them", data.reply, data.answeredBy.join(" + "), data.failedOver);
+    } catch {
+      typing.remove();
+      bubble("them", "Can't reach ASAP right now. Check your connection.");
+    } finally {
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (text) send(text);
+  });
+  document.getElementById("chips").addEventListener("click", (e) => {
+    if (e.target.tagName === "BUTTON") send(e.target.textContent);
+  });
+
+  function renderModels(view) {
+    const current = view.providers.find((p) => p.id === view.active);
+    active.textContent = current ? `Answering with ${current.label} (${current.model})` : "No model configured";
+    for (const btn of switches) {
+      const p = view.providers.find((x) => x.id === btn.dataset.provider);
+      btn.setAttribute("aria-pressed", String(btn.dataset.provider === view.active));
+      btn.disabled = !p || !p.configured;
+      btn.title = !p?.configured ? "Not configured on this server" : view.switchable ? "" : "Switching needs the admin token";
+    }
+  }
+
+  async function loadModels() {
+    try { renderModels(await (await fetch("/api/models")).json()); } catch {}
+  }
+
+  for (const btn of switches) {
+    btn.addEventListener("click", async () => {
+      let token = "";
+      try { token = sessionStorage.getItem("asap-admin") || ""; } catch {}
+      if (!token) token = prompt("Admin token to switch models:") || "";
+      if (!token) return;
+      const res = await fetch("/api/models", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ provider: btn.dataset.provider }),
+      });
+      if (res.status === 401) {
+        try { sessionStorage.removeItem("asap-admin"); } catch {}
+        alert("Wrong admin token.");
+        return;
+      }
+      try { sessionStorage.setItem("asap-admin", token); } catch {}
+      if (res.ok) renderModels(await res.json());
+    });
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch(`/api/updates?sessionId=${encodeURIComponent(sessionId)}`);
+      const { updates } = await res.json();
+      for (const u of updates || []) bubble("update", u.text);
+    } catch {}
+  }
+
+  loadModels();
+  setInterval(poll, 2500);
+  bubble("them", "Hi, I'm ASAP. Airtime, data, light bill or TV, just tell me what you need.");
+})();
+</script>
+</body>
+</html>
