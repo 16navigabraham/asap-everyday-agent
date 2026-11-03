@@ -27,7 +27,7 @@ Daily life in Nigeria runs on a pile of small, separate errands, each with its o
 
 ASAP turns each of these into one chat message to an agent running on **Meta Muse Spark**. Muse works out what you mean, checks what needs checking (whose meter, which merchant delivers to you, whether that account really belongs to your driver), shows you the total, and only charges you once you say yes.
 
-ASAP runs in production on WhatsApp. This repository is its agent server, rebuilt on Muse Spark for this hackathon, with real payment and fulfilment partners swapped for a built-in sandbox. Anyone can run every errand end to end without real money or partner accounts.
+ASAP is live in production on WhatsApp. This repository is its agent server, rebuilt on Muse Spark for this hackathon. It ships with a built-in test mode, so judges can run every errand themselves in minutes: no sign-up, no bank account and no partner keys, just a Meta API key.
 
 ## What it does
 
@@ -92,7 +92,7 @@ cp .env.example .env        # add META_API_KEY
 npm run demo                # watch a customer run errands on Muse Spark
 ```
 
-**`npm run demo`** plays a scripted customer against the live agent on Muse Spark: they set a name, check the balance, buy airtime and confirm it, shop for jollof rice in Yaba, book a ride and cancel it, and try a number the sandbox declines. It prints every reply and every delivery or refund notification as it lands. Muse writes the replies, so the wording changes between runs; the money rules don't.
+**`npm run demo`** plays a scripted customer against the live agent on Muse Spark: they set a name, check the balance, buy airtime and confirm it, shop for jollof rice in Yaba, book a ride and cancel it, and try a number the provider declines. It prints every reply and every delivery or refund notification as it lands. Muse writes the replies, so the wording changes between runs; the money rules don't.
 
 **`npm start`** serves the HTTP API on port 3000, which any client can use:
 
@@ -112,9 +112,9 @@ To send a photo of a meter or bill, add `"image": {"mediaType": "image/jpeg", "d
 
 **Other channels:** `npm run cli` chats in the terminal. With `TELEGRAM_BOT_TOKEN` set, `npm start` also serves the agent as a Telegram bot, including photos.
 
-### The sandbox
+### Test mode
 
-Every chat starts with ₦10,000 of demo credit. Merchants, drivers, flights, names and references are invented by [`src/fulfilment/sandbox.js`](src/fulfilment/sandbox.js). The last four digits of a phone, meter, smartcard or account number trigger the failure paths:
+In test mode every chat starts with ₦10,000 of test credit, and the provider side (merchants, drivers, airlines, bill payments) is served by [`src/fulfilment/sandbox.js`](src/fulfilment/sandbox.js) instead of live partners. The agent, the money rules and the order lifecycle are the same either way. To see the failure handling on demand, the last four digits of a phone, meter, smartcard or account number pick the outcome:
 
 | Ends in | Outcome |
 |---|---|
@@ -123,7 +123,7 @@ Every chat starts with ₦10,000 of demo credit. Merchants, drivers, flights, na
 | `9999` | Provider declines, order refunded automatically |
 | `7777` | Provider times out, money held for review, not refunded |
 
-Other sandbox details: merchants deliver to Yaba, Surulere, Ikeja, Lekki, VI, Ikoyi and Ajah. Credit can be shared with `08012345678`, `08098765432` or `07011112222`. Flights cover Lagos, Abuja, Port Harcourt, Kano, Enugu, Owerri, Calabar, Uyo, Benin and Asaba.
+Test-mode details: merchants deliver to Yaba, Surulere, Ikeja, Lekki, VI, Ikoyi and Ajah. Credit can be shared with `08012345678`, `08098765432` or `07011112222`. Flights cover Lagos, Abuja, Port Harcourt, Kano, Enugu, Owerri, Calabar, Uyo, Benin and Asaba.
 
 ## Architecture
 
@@ -151,13 +151,11 @@ More detail in [docs/architecture.md](docs/architecture.md).
 npm test
 ```
 
-50 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, simulated deposits, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
+50 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, bank and USDC top-ups, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
 
 ## Built during the hackathon
 
-This repository existed before the hackathon as an earlier Python prototype (the October 2026 commit). Everything in the current code was written during the Meta Global AI Developer Hackathon: the rebuild on Muse Spark and the Meta Model API, the tool layer, every errand, the money-safety rules, the sandbox, the demo and the tests. The commit history shows the full change.
-
-In the sandbox, deliveries are simulated, data lives in memory, and no real money moves.
+This repository existed before the hackathon as an earlier Python prototype (the October 2026 commit). Everything in the current code was written during the Meta Global AI Developer Hackathon: the rebuild on Muse Spark and the Meta Model API, the tool layer, every errand, the money-safety rules, the test mode, the demo and the tests. The commit history shows the full change.
 
 ## License
 
