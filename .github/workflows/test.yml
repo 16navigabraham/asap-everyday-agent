@@ -9,6 +9,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Voice notes arrive as OGG/Opus and Muse Voice Transcribe only
+      # accepts WAV, so ffmpeg converts first. Not preinstalled on this
+      # runner image (confirmed: a run without this step failed with
+      # "spawn ffmpeg ENOENT" on the test that exercises the real binary).
+      - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
