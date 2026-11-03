@@ -1,5 +1,7 @@
 "use strict";
 
+const { spawn } = require("node:child_process");
+
 const config = require("../config");
 const logger = require("../log");
 
@@ -84,61 +86,107 @@ async function complete({ system, tools, messages, fetchImpl = fetch, retryDelay
 }
 
 /**
- * Kept literal on purpose: a summary or a translation of "send 2000 airtime"
- * that drops a zero is a wrong purchase with nothing in the logs to show it.
- * Verbatim keeps the speaker's own words, in their own language, and the
- * agent confirms anything about money before acting on it.
+ * A voice note to text, by **Muse Voice Transcribe**, not Muse Spark.
+ *
+ * Muse Spark's `/v1/messages` endpoint has no audio content block at all
+ * (text, image, video, document only, confirmed against Meta's own docs) --
+ * an earlier version of this guessed two shapes and both came back 400 on
+ * every real call. Audio transcription on Meta Model API is a separate,
+ * dedicated model at a separate endpoint: `POST /v1/asr/transcribe`. It
+ * requires mono 16-bit PCM WAV at 16 or 24 kHz; voice notes arrive as
+ * OGG/Opus, so ffmpeg converts first -- the one thing in this repo that
+ * isn't zero-install, see README.
+ *
+ * Separate from the agent's own turn, so the audio never enters
+ * conversation history and the agent reasons over the user's words exactly
+ * like typed text.
  */
-const TRANSCRIBE_INSTRUCTION =
-  "Transcribe this voice note verbatim. The speaker may use Yoruba, Hausa, Igbo, Nigerian Pidgin, English, or a mix. " +
-  "Keep every word in the language it was spoken, with correct spelling and tone marks; do not translate. Write " +
-  "numbers, amounts and phone numbers as digits. Output only the transcript, with no preamble, quotes or commentary. " +
-  "If there is no intelligible speech, output nothing.";
+const MUSE_ASR_MODEL = "muse-voice-transcribe-1.0";
 
-function audioBlock(format, mediaType, data) {
-  if (format === "input_audio") {
-    return { type: "input_audio", input_audio: { data, format: mediaType.split("/")[1] } };
-  }
-  return { type: "audio", source: { type: "base64", media_type: mediaType, data } };
+/** Mono 16-bit PCM WAV at 24kHz -- the one container this endpoint accepts.
+ * Piped through stdin/stdout: a voice note is a few seconds of audio,
+ * nowhere near worth temp-file I/O and cleanup. */
+function convertToWav(buffer) {
+  return new Promise((resolve, reject) => {
+    const ff = spawn("ffmpeg", [
+      "-i", "pipe:0",
+      "-ac", "1",
+      "-ar", "24000",
+      "-c:a", "pcm_s16le",
+      "-map_metadata", "-1",
+      "-f", "wav",
+      "pipe:1",
+    ]);
+
+    const chunks = [];
+    let stderr = "";
+    ff.stdout.on("data", (chunk) => chunks.push(chunk));
+    ff.stderr.on("data", (chunk) => { stderr += chunk; });
+    ff.on("error", reject);
+    ff.on("close", (code) => {
+      if (code !== 0) return reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(-300)}`));
+      resolve(Buffer.concat(chunks));
+    });
+
+    ff.stdin.on("error", () => {}); // ffmpeg can close stdin early on a bad/short input; the exit code is the real signal
+    ff.stdin.end(Buffer.from(buffer));
+  });
 }
 
 /**
- * A voice note to text, by Muse Spark. Separate from the agent's own turn,
- * so the audio never enters conversation history and the agent reasons over
- * the user's words exactly like typed text.
- *
- * Tries the configured audio block format; if Meta rejects it as a bad
- * request, tries the other once. Returns { ok, text } or { ok: false, reason }.
+ * @returns {Promise<{ok:true,text:string}|{ok:false,reason:string}>}
+ * `fetchImpl` and `convertImpl` are injectable for tests, matching
+ * `complete`'s own `fetchImpl` convention above.
  */
-async function transcribe(buffer, mimeType, { fetchImpl = fetch } = {}) {
+async function transcribe(buffer, mimeType, { fetchImpl = fetch, convertImpl = convertToWav } = {}) {
   if (!config.muse.apiKey) return { ok: false, reason: "not_configured" };
 
-  const mediaType = String(mimeType || "").split(";")[0].trim().toLowerCase();
-  const data = Buffer.from(buffer).toString("base64");
-  const formats = config.muse.audioFormat === "input_audio" ? ["input_audio", "source"] : ["source", "input_audio"];
-
-  for (const format of formats) {
-    const body = {
-      model: config.muse.model,
-      max_tokens: 1024,
-      messages: [{ role: "user", content: [audioBlock(format, mediaType, data), { type: "text", text: TRANSCRIBE_INSTRUCTION }] }],
-      thinking: { type: "adaptive" },
-      output_config: { effort: "low" },
-    };
-    try {
-      const response = await callOnce(body, fetchImpl);
-      const text = (response.content || [])
-        .filter((block) => block.type === "text")
-        .map((block) => block.text)
-        .join(" ")
-        .trim();
-      return text ? { ok: true, text, format } : { ok: false, reason: "no_speech" };
-    } catch (error) {
-      if (error.status !== 400) return { ok: false, reason: "provider_error" };
-      logger.warn("Muse Spark rejected this audio format", { format });
-    }
+  let wav;
+  try {
+    wav = await convertImpl(buffer);
+  } catch (error) {
+    logger.warn("Voice note WAV conversion failed", { error: error.message, mimeType });
+    return { ok: false, reason: "conversion_failed" };
   }
-  return { ok: false, reason: "audio_not_accepted" };
+
+  const form = new FormData();
+  form.append(
+    "request",
+    new Blob(
+      [JSON.stringify({
+        mode: "PUSH_TO_TALK",
+        model: MUSE_ASR_MODEL,
+        audioEncoding: "WAV",
+        // No languageBias: Muse Voice Transcribe's 25 supported languages
+        // don't include Yoruba, Hausa, Igbo or Pidgin, so biasing toward
+        // English would only hurt the audio this repo actually expects.
+        // Auto-detect gives every supported language its real shot.
+      })],
+      { type: "application/json" },
+    ),
+  );
+  form.append("audio", new Blob([wav], { type: "audio/wav" }), "voice-note.wav");
+
+  let res;
+  try {
+    res = await fetchImpl(`${config.muse.baseUrl}/v1/asr/transcribe`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${config.muse.apiKey}` },
+      body: form,
+      signal: AbortSignal.timeout(config.muse.timeoutMs),
+    });
+  } catch (error) {
+    return { ok: false, reason: "unreachable" };
+  }
+
+  if (!res.ok) {
+    logger.warn("Muse Voice Transcribe rejected the call", { status: res.status });
+    return { ok: false, reason: res.status === 429 ? "rate_limited" : "provider_error" };
+  }
+
+  const body = await res.json();
+  const text = String(body?.transcript || "").trim();
+  return text ? { ok: true, text } : { ok: false, reason: "no_speech" };
 }
 
 /**
@@ -156,4 +204,4 @@ async function voiceNoteContent(buffer, mimeType, options) {
   );
 }
 
-module.exports = { complete, buildRequest, transcribe, voiceNoteContent, isRetryable, ModelError, TRANSCRIBE_INSTRUCTION };
+module.exports = { complete, buildRequest, transcribe, voiceNoteContent, isRetryable, ModelError, convertToWav };
