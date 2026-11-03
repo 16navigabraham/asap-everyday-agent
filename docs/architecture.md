@@ -48,7 +48,7 @@ The table lives in `orders/states.js`, and every change goes through `store.move
 
 ## Inbound money
 
-`wallet/inbound.js` simulates a bank transfer into the user's account number, or a USDC deposit on Base, Solana or Polygon at a fixed sandbox rate. Both are credited after a delay, idempotently on the turn that requested them, and announced by notification.
+In test mode, `wallet/inbound.js` stands in for a bank transfer into the user's account number, or a stablecoin deposit converted to naira at a fixed rate. Both are credited after a delay, idempotently on the turn that requested them, and announced by notification.
 
 ## Replacing the sandbox
 

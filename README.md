@@ -5,9 +5,9 @@
 <h1 align="center">ASAP Everyday Agent</h1>
 
 <p align="center">
-  Everyday errands in Nigeria over plain chat, built on <strong>Meta Muse Spark</strong>.
+  An AI agent that runs everyday errands for people in Nigeria, built on <strong>Meta Muse Spark</strong>.
   <br>
-  Airtime, bills, food, rides, flights and payments, with no app, no menus, and no money moving until you say yes.
+  Airtime, bills, food, rides and flights, wherever you already chat, and no money moves until you say yes.
 </p>
 
 <p align="center">
@@ -25,9 +25,24 @@
 
 Daily life in Nigeria runs on a pile of small, separate errands, each with its own app, USSD code or phone call: topping up your mum's line, buying data, paying the light bill before the power goes, renewing GOtv, ordering lunch, booking a ride, paying the driver, getting a flight to Abuja. They're frequent and fiddly, and a single wrong digit on a meter number sends your money to a stranger with no way back.
 
-ASAP turns each of these into one chat message to an agent running on **Meta Muse Spark**. Muse works out what you mean, checks what needs checking (whose meter, which merchant delivers to you, whether that account really belongs to your driver), shows you the total, and only charges you once you say yes.
+ASAP turns each of these into one message to an agent running on **Meta Muse Spark**. Muse works out what you mean, checks what needs checking (whose meter, which merchant delivers to you, whether that account really belongs to your driver), shows you the total, and only charges you once you say yes. You pay from a prepaid ASAP wallet.
 
-ASAP is live in production on WhatsApp. This repository is its agent server, rebuilt on Muse Spark for this hackathon. It ships with a built-in test mode, so judges can run every errand themselves in minutes: no sign-up, no bank account and no partner keys, just a Meta API key.
+## ASAP today
+
+ASAP is a live product by ZELABS LTD ([useasap.xyz](https://useasap.xyz)), and it reaches people wherever they already are:
+
+- **WhatsApp:** the main channel. Chat with ASAP like any other contact.
+- **Telegram:** the same agent as a Telegram bot.
+- **Web app:** an installable app at app.useasap.xyz, for chatting with ASAP from any browser.
+- **Your own AI assistant:** an MCP server, so Claude, ChatGPT or any MCP-capable assistant can run ASAP errands for you.
+
+Behind the chat is a two-sided marketplace. Local merchants (restaurants, bakeries, grocers, gadget shops) list what they sell on the ASAP merchant dashboard, receive orders, deliver, and get paid out. Affiliates earn by referring new users.
+
+## This repository
+
+This is ASAP's agent server, rebuilt on Muse Spark for this hackathon. Every channel above sits on top of what this repo contains: one agent, one set of tools, and one set of money rules. Here the agent is served over an HTTP API that any client can use, over Telegram, and in a terminal CLI.
+
+It ships with a built-in test mode, so judges can run every errand themselves in minutes: no sign-up, no bank account and no partner keys, just a Meta API key.
 
 ## What it does
 
@@ -41,7 +56,7 @@ ASAP is live in production on WhatsApp. This repository is its agent server, reb
 | Paying the driver | *"Pay the driver ₦4,000 by transfer"* | Only to an account that resolves to *your* assigned driver's name |
 | Flights | *"Lagos to Abuja next Friday, 2 of us"* | Numbered options, pick one, confirm, booking reference |
 | Sending credit | *"Send ₦1,000 to 08012345678"* | Only to existing ASAP users, with its own confirmation step |
-| Funding | *"Add ₦5,000"* or *"Can I pay with USDC?"* | Bank transfer to your account number, or a USDC address on Base, Solana or Polygon |
+| Funding the wallet | *"Add ₦5,000"* | Bank transfer to your own account number. A stablecoin deposit is also accepted and converted to naira on arrival |
 | Your money | *"What did I spend this month?"* | Live order status, wallet movements, spending by category |
 
 It handles English and Pidgin, remembers your name, area and saved numbers ("my usual", "Mum's line"), and asks exactly one question when something is missing instead of guessing.
@@ -151,7 +166,7 @@ More detail in [docs/architecture.md](docs/architecture.md).
 npm test
 ```
 
-50 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, bank and USDC top-ups, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
+50 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, wallet top-ups, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
 
 ## Built during the hackathon
 
