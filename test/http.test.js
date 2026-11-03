@@ -18,16 +18,14 @@ after(() => server.close());
 const chat = (body) =>
   fetch(`${base}/api/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
-test("the chat page is served and names Muse Spark", async () => {
+test("the root is a JSON description of the API, not a web page", async () => {
   const res = await fetch(base);
   assert.equal(res.status, 200);
-  assert.match(await res.text(), /Meta Muse Spark/);
-});
-
-test("the info endpoint reports the Muse model and nothing else", async () => {
-  const info = await (await fetch(`${base}/api/info`)).json();
-  assert.deepEqual(Object.keys(info).sort(), ["configured", "model", "modelId"]);
+  assert.match(res.headers.get("content-type"), /application\/json/);
+  const info = await res.json();
+  assert.equal(info.model, "Meta Muse Spark");
   assert.equal(info.modelId, "muse-spark-1.1");
+  assert.ok(info.endpoints["POST /api/chat"]);
 });
 
 test("there is no model switch or admin endpoint", async () => {

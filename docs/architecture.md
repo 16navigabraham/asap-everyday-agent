@@ -2,7 +2,7 @@
 
 ## A turn
 
-1. A message arrives on a channel (web, Telegram, CLI) as `"<channel>:<id>"`, plus text or a photo with a caption.
+1. A message arrives on a channel (the HTTP API, Telegram, the CLI) as `"<channel>:<id>"`, plus text or a photo with a caption.
 2. `conversations.js` takes that user's lock, so two quick messages can't both act on the same quote, and loads their history.
 3. `agent/turn.js` sends the system prompt (with today's date in Lagos), the 29 tool definitions and the history to Muse Spark through `model/muse.js`.
 4. If Muse asks for tools, `agent/executor.js` validates and runs them, and the results go back to Muse. This repeats up to eight times.

@@ -83,18 +83,34 @@ Muse decides *what* the user wants. The code decides whether money moves. Every 
 
 ## Try it
 
+This repository is the server only. There is nothing to install: it has zero npm dependencies and needs only Node 22+.
+
 ```bash
 git clone https://github.com/16navigabraham/asap-everyday-agent.git
 cd asap-everyday-agent
 cp .env.example .env        # add META_API_KEY
-npm start                   # http://localhost:3000
+npm run demo                # watch a customer run errands on Muse Spark
 ```
 
-There is nothing to install: it has zero npm dependencies and needs only Node 22+.
+**`npm run demo`** plays a scripted customer against the live agent on Muse Spark: they set a name, check the balance, buy airtime and confirm it, shop for jollof rice in Yaba, book a ride and cancel it, and try a number the sandbox declines. It prints every reply and every delivery or refund notification as it lands. Muse writes the replies, so the wording changes between runs; the money rules don't.
 
-- **Web chat** (best for trying everything, including photos): `npm start`, then open http://localhost:3000.
-- **Terminal:** `npm run cli`.
-- **Telegram:** set `TELEGRAM_BOT_TOKEN`, and `npm start` serves the bot too, photos included.
+**`npm start`** serves the HTTP API on port 3000, which any client can use:
+
+```bash
+curl -s localhost:3000/          # service info: model, endpoints
+
+curl -s localhost:3000/api/chat -H 'content-type: application/json' \
+  -d '{"sessionId":"judge-0001","text":"Buy ₦500 MTN airtime for 08031234567"}'
+
+curl -s localhost:3000/api/chat -H 'content-type: application/json' \
+  -d '{"sessionId":"judge-0001","text":"Yes, go ahead"}'
+
+curl -s 'localhost:3000/api/updates?sessionId=judge-0001'   # the delivery notification
+```
+
+To send a photo of a meter or bill, add `"image": {"mediaType": "image/jpeg", "data": "<base64>"}` to the chat body.
+
+**Other channels:** `npm run cli` chats in the terminal. With `TELEGRAM_BOT_TOKEN` set, `npm start` also serves the agent as a Telegram bot, including photos.
 
 ### The sandbox
 
@@ -109,12 +125,10 @@ Every chat starts with ₦10,000 of demo credit. Merchants, drivers, flights, na
 
 Other sandbox details: merchants deliver to Yaba, Surulere, Ikeja, Lekki, VI, Ikoyi and Ajah. Credit can be shared with `08012345678`, `08098765432` or `07011112222`. Flights cover Lagos, Abuja, Port Harcourt, Kano, Enugu, Owerri, Calabar, Uyo, Benin and Asaba.
 
-**Demo script:** check the balance; buy ₦500 airtime for `08031234567`; send a photo of a meter and pay it; order jollof rice in Yaba and ask for a photo; book a ride and cancel it to see the fee refunded; buy airtime for `08031239999` to see an automatic refund.
-
 ## Architecture
 
 ```
-web chat (text + photos) / Telegram / CLI
+HTTP API (text + photos) / Telegram / CLI
           │
    conversations.js ── per-user history, one turn at a time per user, photos dropped after their turn
           │
@@ -137,7 +151,7 @@ More detail in [docs/architecture.md](docs/architecture.md).
 npm test
 ```
 
-51 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, simulated deposits, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
+50 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, simulated deposits, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
 
 ## Scope
 

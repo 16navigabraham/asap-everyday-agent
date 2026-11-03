@@ -1,7 +1,7 @@
 {
   "name": "asap-everyday-agent",
   "version": "2.0.0",
-  "description": "An everyday-errands agent for Nigeria (airtime, data, electricity, TV) powered by Meta's Muse Spark.",
+  "description": "The server for ASAP, an everyday-errands agent for Nigeria (bills, food, rides, flights, payments) running on Meta Muse Spark.",
   "license": "MIT",
   "type": "commonjs",
   "main": "src/index.js",
@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env src/index.js",
+    "demo": "node --env-file-if-exists=.env scripts/demo.js",
     "cli": "node --env-file-if-exists=.env src/channels/cli.js",
     "test": "node --test \"test/**/*.test.js\""
   }

@@ -1,8 +1,6 @@
 "use strict";
 
-const fs = require("node:fs");
 const http = require("node:http");
-const path = require("node:path");
 
 const config = require("../config");
 const logger = require("../log");
@@ -11,11 +9,11 @@ const sandbox = require("../fulfilment/sandbox");
 const { handleMessage } = require("../conversations");
 
 /**
- * The web channel: the chat page, a chat endpoint (text and optional photo),
- * a poll endpoint for delivery notifications, and listing photos.
+ * The HTTP API: a chat endpoint (text and optional photo), a poll endpoint
+ * for delivery notifications, and listing photos. Any client can sit on top:
+ * a mobile app, a WhatsApp bridge, curl.
  */
 
-const PAGE = path.join(__dirname, "..", "..", "public", "index.html");
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024;
 const MAX_TEXT_CHARS = 1000;
@@ -102,13 +100,20 @@ async function route(req, res) {
   const url = new URL(req.url, "http://localhost");
   const client = req.socket.remoteAddress || "unknown";
 
-  if (req.method === "GET" && url.pathname === "/") {
-    return send(res, 200, fs.readFileSync(PAGE), "text/html; charset=utf-8");
-  }
   if (req.method === "GET" && url.pathname === "/healthz") return send(res, 200, { ok: true });
 
-  if (req.method === "GET" && url.pathname === "/api/info") {
-    return send(res, 200, { model: "Meta Muse Spark", modelId: config.muse.model, configured: Boolean(config.muse.apiKey) });
+  if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/api/info")) {
+    return send(res, 200, {
+      service: "asap-everyday-agent",
+      model: "Meta Muse Spark",
+      modelId: config.muse.model,
+      configured: Boolean(config.muse.apiKey),
+      endpoints: {
+        "POST /api/chat": "{ sessionId, text, image?: { mediaType, data(base64) } } -> { reply, attachments }",
+        "GET /api/updates?sessionId=": "delivery notifications since the last poll",
+        "GET /media/listing/:id.svg": "listing photo",
+      },
+    });
   }
 
   const photo = url.pathname.match(/^\/media\/listing\/(\d+)\.svg$/);
