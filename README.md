@@ -89,7 +89,7 @@ authorization: Bearer $META_API_KEY
 What Muse Spark does in this agent:
 
 - **Understands local languages.** Yoruba, Hausa, Igbo, Nigerian Pidgin and English, or a mix in one message. Muse replies in the language the user is using, switches when they switch, and never asks them to use English. Amounts and numbers always stay in digits, and before money moves Muse states the amount and the recipient and waits for a clear yes ("bẹ́ẹ̀ni", "eh", "ee", "toh", "na so", "yes").
-- **Hears voice notes.** A voice note from WhatsApp, Telegram or the API goes to **Muse Voice Transcribe**, Meta's dedicated speech-to-text model (a separate endpoint from the chat model, auto-detecting the language rather than being told to transcribe verbatim). The transcript then enters the agent's turn as the user's own words, marked as speech, so Muse repeats back any amount or number it heard and confirms it before quoting. Transcription is a separate call with no tools, so audio can never trigger an action on its own.
+- **Hears voice notes.** A voice note from WhatsApp, Telegram or the API goes to **Muse Spark 1.2** itself (audio understanding via Chat Completions, told explicitly to transcribe verbatim and never translate — Meta's dedicated transcription model exists too, but its supported languages don't include the ones this repo targets). The transcript then enters the agent's turn as the user's own words, marked as speech, so Muse repeats back any amount or number it heard and confirms it before quoting. Transcription is a separate call with no tools, so audio can never trigger an action on its own.
 - **Finds products by their local names.** *Ìrẹsì*, *shinkafa* and *osikapa* all find rice, with or without tone marks.
 - **Plans multi-step errands as tool calls.** Paying a light bill is: look up the meter, show the name, wait for a yes, quote, wait for another yes, confirm. A food order is: search, add items, ask for the address, price, confirm. Muse chooses and sequences 29 tools.
 - **Reads photos.** Send a picture of a meter, bill or smartcard and Muse reads the number off it, repeats it back, and uses it once you confirm. The image goes to Muse as an image block in that turn only; history keeps a note instead of the bytes.
@@ -114,7 +114,7 @@ Muse decides *what* the user wants. The code decides whether money moves. Every 
 
 ## Try it
 
-This repository is the server only. It has zero npm dependencies and needs only Node 22+ — the one exception is voice notes, which need [`ffmpeg`](https://ffmpeg.org/download.html) on your `PATH` (Muse Voice Transcribe only accepts WAV; voice notes arrive as OGG/Opus, so ffmpeg converts them first). Everything else — text, photos, every channel — needs nothing beyond Node.
+This repository is the server only. It has zero npm dependencies and needs only Node 22+ — the one exception is voice notes, which need [`ffmpeg`](https://ffmpeg.org/download.html) on your `PATH` (Muse Spark's audio understanding only accepts WAV or MP3; voice notes arrive as OGG/Opus, so ffmpeg converts them first). Everything else — text, photos, every channel — needs nothing beyond Node.
 
 ```bash
 git clone https://github.com/16navigabraham/asap-everyday-agent.git
@@ -196,7 +196,7 @@ More detail in [docs/architecture.md](docs/architecture.md).
 npm test
 ```
 
-70 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, voice notes (the Muse Voice Transcribe request, WAV conversion failure, transcription failure, WhatsApp and API voice paths), local-language product search, the WhatsApp webhook (handshake, signature check, retries, photos) and the MCP server (session, tool annotations, a full quote-confirm-deliver run, wallet isolation), same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, wallet top-ups, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
+70 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, voice notes (the Muse Spark audio request, WAV conversion failure, transcription failure, WhatsApp and API voice paths), local-language product search, the WhatsApp webhook (handshake, signature check, retries, photos) and the MCP server (session, tool annotations, a full quote-confirm-deliver run, wallet isolation), same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, wallet top-ups, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
 
 ## Built during the hackathon
 

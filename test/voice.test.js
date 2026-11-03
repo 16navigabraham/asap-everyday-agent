@@ -7,13 +7,12 @@ const { resetAll, scriptedModel, text } = require("./helpers");
 const muse = require("../src/model/muse");
 const http = require("../src/channels/http");
 
-/** `fakeFetch` for the ASR endpoint: body is multipart FormData, not JSON,
- * so calls are recorded with the raw body for tests that need to inspect
- * the `request` part themselves. */
+/** `fakeFetch` for Chat Completions: plain JSON body, unlike the old ASR
+ * endpoint's multipart form. */
 function fakeFetch(handlers) {
   const calls = [];
   const fn = async (url, init) => {
-    calls.push({ url, body: init.body });
+    calls.push({ url, headers: init.headers, body: JSON.parse(init.body) });
     const { status = 200, json = {} } = handlers.shift()(calls[calls.length - 1]) || {};
     return { ok: status < 400, status, json: async () => json };
   };
@@ -21,17 +20,10 @@ function fakeFetch(handlers) {
   return fn;
 }
 
-async function requestPartOf(formData) {
-  for (const [key, value] of formData.entries()) {
-    if (key === "request") return JSON.parse(await value.text());
-  }
-  return undefined;
-}
-
-const transcript = (value) => ({ json: { transcript: value } });
+const transcript = (value) => ({ json: { choices: [{ message: { content: value } }] } });
 const fakeWav = async () => Buffer.from("fake-wav-bytes");
 
-test("a voice note goes to Muse Voice Transcribe, not Muse Spark's chat endpoint", async () => {
+test("a voice note goes to Muse Spark 1.2 via Chat Completions", async () => {
   const fetchImpl = fakeFetch([() => transcript("Mo fẹ́ ra ìrẹsì")]);
   const result = await muse.transcribe(Buffer.from("opus"), "audio/ogg; codecs=opus", {
     fetchImpl,
@@ -40,13 +32,15 @@ test("a voice note goes to Muse Voice Transcribe, not Muse Spark's chat endpoint
   const [call] = fetchImpl.calls;
 
   assert.deepEqual(result, { ok: true, text: "Mo fẹ́ ra ìrẹsì" });
-  assert.equal(call.url, "https://api.meta.ai/v1/asr/transcribe");
-  assert.ok(call.body instanceof FormData, "sends multipart form data, not JSON");
+  assert.equal(call.url, "https://api.meta.ai/v1/chat/completions");
+  assert.equal(call.body.model, "muse-spark-1.2");
+  assert.equal(call.body.max_completion_tokens, 4000, "needs real budget or the transcript comes back empty");
 
-  const requestPart = await requestPartOf(call.body);
-  assert.equal(requestPart.model, "muse-voice-transcribe-1.0");
-  assert.equal(requestPart.audioEncoding, "WAV");
-  assert.equal(requestPart.languageBias, undefined, "forcing English would only hurt the other 4 languages this repo targets");
+  const [instruction, audio] = call.body.messages[0].content;
+  assert.match(instruction.text, /verbatim/);
+  assert.match(instruction.text, /Yoruba, Hausa, Igbo/);
+  assert.match(instruction.text, /do not translate/);
+  assert.deepEqual(audio, { type: "input_audio", input_audio: { data: Buffer.from("fake-wav-bytes").toString("base64"), format: "wav" } });
 });
 
 test("if WAV conversion fails, Muse is never called over the network", async () => {

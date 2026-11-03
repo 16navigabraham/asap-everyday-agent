@@ -86,22 +86,46 @@ async function complete({ system, tools, messages, fetchImpl = fetch, retryDelay
 }
 
 /**
- * A voice note to text, by **Muse Voice Transcribe**, not Muse Spark.
+ * A voice note to text, by **Muse Spark 1.2, via Chat Completions**.
  *
- * Muse Spark's `/v1/messages` endpoint has no audio content block at all
- * (text, image, video, document only, confirmed against Meta's own docs) --
- * an earlier version of this guessed two shapes and both came back 400 on
- * every real call. Audio transcription on Meta Model API is a separate,
- * dedicated model at a separate endpoint: `POST /v1/asr/transcribe`. It
- * requires mono 16-bit PCM WAV at 16 or 24 kHz; voice notes arrive as
- * OGG/Opus, so ffmpeg converts first -- the one thing in this repo that
- * isn't zero-install, see README.
+ * Two wrong turns before this one:
  *
- * Separate from the agent's own turn, so the audio never enters
- * conversation history and the agent reasons over the user's words exactly
- * like typed text.
+ * 1. Sending audio as a content block to Muse Spark's Anthropic-compatible
+ *    `/v1/messages` endpoint, guessing at a shape. Wrong: that endpoint's
+ *    content blocks are text, image, video and document -- no audio, ever.
+ * 2. Meta's dedicated ASR model, Muse Voice Transcribe
+ *    (`POST /v1/asr/transcribe`). The right endpoint shape -- but its 25
+ *    supported languages don't include Yoruba, Hausa, Igbo or Pidgin, and
+ *    tested live against a real Yoruba voice note it came back as garbled,
+ *    half-English nonsense, not even a clean mistranslation. The exact
+ *    languages this repo exists for are the ones that model cannot hear.
+ *
+ * **The actual fix:** Muse Spark itself understands audio, confirmed in
+ * Meta's video/audio understanding docs, but only through the
+ * OpenAI-compatible Chat Completions endpoint (`input_audio` content),
+ * never the Anthropic Messages endpoint used for the agent's own turns.
+ * Tested live against the same Yoruba voice note: correct, coherent Yoruba
+ * with proper tone marks. Meta's own docs are explicit that **1.2**, not
+ * 1.3, is the version to use for audio ("Audio understanding in Muse Spark
+ * 1.3 is currently not fully supported"), and that the response needs real
+ * budget -- at least 4000 tokens -- or a transcript can come back empty,
+ * since Muse Spark reasons on every call and reasoning shares that budget.
+ *
+ * Formats accepted are WAV and MP3 only; voice notes arrive as OGG/Opus,
+ * so ffmpeg converts first -- the one thing in this repo that isn't
+ * zero-install, see README. Separate from the agent's own turn, so the
+ * audio never enters conversation history and the agent reasons over the
+ * user's words exactly like typed text. Unlike the ASR endpoint, this one
+ * is a real chat model, so it can actually be told not to translate.
  */
-const MUSE_ASR_MODEL = "muse-voice-transcribe-1.0";
+const MUSE_TRANSCRIBE_MODEL = "muse-spark-1.2";
+const MUSE_TRANSCRIBE_MAX_TOKENS = 4000;
+
+const TRANSCRIBE_INSTRUCTION =
+  "Transcribe this audio verbatim. The speaker may use Yoruba, Hausa, Igbo, Nigerian Pidgin, English, or a mix. " +
+  "Keep every word in the language it was spoken, with correct spelling and tone marks; do not translate. Write " +
+  "numbers, amounts and phone numbers as digits. Output only the transcript, with no preamble, quotes or commentary. " +
+  "If there is no intelligible speech, output nothing.";
 
 /** Mono 16-bit PCM WAV at 24kHz -- the one container this endpoint accepts.
  * Piped through stdin/stdout: a voice note is a few seconds of audio,
@@ -149,30 +173,30 @@ async function transcribe(buffer, mimeType, { fetchImpl = fetch, convertImpl = c
     return { ok: false, reason: "conversion_failed" };
   }
 
-  const form = new FormData();
-  form.append(
-    "request",
-    new Blob(
-      [JSON.stringify({
-        mode: "PUSH_TO_TALK",
-        model: MUSE_ASR_MODEL,
-        audioEncoding: "WAV",
-        // No languageBias: Muse Voice Transcribe's 25 supported languages
-        // don't include Yoruba, Hausa, Igbo or Pidgin, so biasing toward
-        // English would only hurt the audio this repo actually expects.
-        // Auto-detect gives every supported language its real shot.
-      })],
-      { type: "application/json" },
-    ),
-  );
-  form.append("audio", new Blob([wav], { type: "audio/wav" }), "voice-note.wav");
-
   let res;
   try {
-    res = await fetchImpl(`${config.muse.baseUrl}/v1/asr/transcribe`, {
+    res = await fetchImpl(`${config.muse.baseUrl}/v1/chat/completions`, {
       method: "POST",
-      headers: { authorization: `Bearer ${config.muse.apiKey}` },
-      body: form,
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${config.muse.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: MUSE_TRANSCRIBE_MODEL,
+        max_completion_tokens: MUSE_TRANSCRIBE_MAX_TOKENS,
+        // Muse Spark always reasons; "low" leaves room in the budget for
+        // the transcript itself.
+        reasoning_effort: "low",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: TRANSCRIBE_INSTRUCTION },
+              { type: "input_audio", input_audio: { data: wav.toString("base64"), format: "wav" } },
+            ],
+          },
+        ],
+      }),
       signal: AbortSignal.timeout(config.muse.timeoutMs),
     });
   } catch (error) {
@@ -180,12 +204,12 @@ async function transcribe(buffer, mimeType, { fetchImpl = fetch, convertImpl = c
   }
 
   if (!res.ok) {
-    logger.warn("Muse Voice Transcribe rejected the call", { status: res.status });
+    logger.warn("Muse Spark audio transcription failed", { status: res.status });
     return { ok: false, reason: res.status === 429 ? "rate_limited" : "provider_error" };
   }
 
   const body = await res.json();
-  const text = String(body?.transcript || "").trim();
+  const text = String(body?.choices?.[0]?.message?.content || "").trim();
   return text ? { ok: true, text } : { ok: false, reason: "no_speech" };
 }
 
