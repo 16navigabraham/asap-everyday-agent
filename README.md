@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/icon.svg" width="96" height="96" alt="ASAP icon">
+  <img src="docs/assets/logo.png" width="96" height="96" alt="ASAP logo">
 </p>
 
 <h1 align="center">ASAP</h1>
