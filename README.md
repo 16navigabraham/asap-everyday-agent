@@ -27,7 +27,7 @@ Daily life in Nigeria runs on a pile of small, separate errands, each with its o
 
 ASAP turns each of these into one chat message to an agent running on **Meta Muse Spark**. Muse works out what you mean, checks what needs checking (whose meter, which merchant delivers to you, whether that account really belongs to your driver), shows you the total, and only charges you once you say yes.
 
-This repository is the open-source core of ASAP's agent. It runs end to end against a built-in sandbox, so anyone can try every errand without real money or partner accounts.
+ASAP runs in production on WhatsApp. This repository is its agent server, rebuilt on Muse Spark for this hackathon, with real payment and fulfilment partners swapped for a built-in sandbox. Anyone can run every errand end to end without real money or partner accounts.
 
 ## What it does
 
@@ -153,9 +153,11 @@ npm test
 
 50 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, simulated deposits, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
 
-## Scope
+## Built during the hackathon
 
-This is the agent core, not the whole ASAP product. The production service runs on WhatsApp with real payment and fulfilment partners, identity verification, account security and internal operations tooling, none of which is part of this repository. Here fulfilment is simulated, data lives in memory, and no real money moves.
+This repository existed before the hackathon as an earlier Python prototype (the October 2026 commit). Everything in the current code was written during the Meta Global AI Developer Hackathon: the rebuild on Muse Spark and the Meta Model API, the tool layer, every errand, the money-safety rules, the sandbox, the demo and the tests. The commit history shows the full change.
+
+In the sandbox, deliveries are simulated, data lives in memory, and no real money moves.
 
 ## License
 
