@@ -2,7 +2,7 @@
 
 ## A turn
 
-1. A message arrives on a channel (the HTTP API, Telegram, the CLI) as `"<channel>:<id>"`, plus text or a photo with a caption.
+1. A message arrives on a channel (WhatsApp, Telegram, the HTTP API, the CLI) as `"<channel>:<id>"`, plus text or a photo with a caption. MCP is the exception: there the user's own assistant is the model, and it calls the same tools directly (see below).
 2. `conversations.js` takes that user's lock, so two quick messages can't both act on the same quote, and loads their history.
 3. `agent/turn.js` sends the system prompt (with today's date in Lagos), the 29 tool definitions and the history to Muse Spark through `model/muse.js`.
 4. If Muse asks for tools, `agent/executor.js` validates and runs them, and the results go back to Muse. This repeats up to eight times.
@@ -57,3 +57,15 @@ In test mode, `wallet/inbound.js` stands in for a bank transfer into the user's 
 ## Storage
 
 Wallets, orders, profiles and histories are in memory, which is enough for a sandbox demo. The ledger is append-only and idempotent on reference, so moving it to a database means one table with a unique constraint on `(user_id, ref)`.
+
+## Channels
+
+| Channel | Module | Notes |
+|---|---|---|
+| WhatsApp | `channels/whatsapp.js` | Meta WhatsApp Cloud API. Handshake on GET, signed deliveries on POST (`X-Hub-Signature-256`, constant-time, fails closed), 200 before the turn runs, retries deduplicated by message id, photos fetched through the Graph API, read receipt with typing indicator |
+| MCP | `channels/mcp.js` | Streamable HTTP, JSON responses. `initialize` opens a session that is the test wallet (or a Bearer key keeps one wallet across sessions). Tools are the agent's own, run through the same executor, with `readOnlyHint` / `destructiveHint` annotations so the host asks before a confirmation. `get_updates` returns deliveries and refunds |
+| Telegram | `channels/telegram.js` | Long polling, text and photos |
+| HTTP API | `channels/http.js` | `POST /api/chat`, `GET /api/updates`, rate limited per client |
+| CLI | `channels/cli.js` | Terminal chat |
+
+Every channel registers a sender with `notify.js` for its own user-id prefix, so the order worker can report a delivery without knowing which channel the user is on.

@@ -6,6 +6,8 @@ const config = require("../config");
 const logger = require("../log");
 const notify = require("../notify");
 const sandbox = require("../fulfilment/sandbox");
+const whatsapp = require("./whatsapp");
+const mcp = require("./mcp");
 const { handleMessage } = require("../conversations");
 
 /**
@@ -32,13 +34,15 @@ notify.register("web", (userId, text) => {
 // to burn model credit in a loop.
 const WINDOW_MS = 60_000;
 const LIMIT = 20;
+// An assistant makes several tool calls for one request, so MCP gets more room.
+const MCP_LIMIT = 120;
 const hits = new Map();
-function rateLimited(key) {
+function rateLimited(key, limit = LIMIT) {
   const now = Date.now();
   const recent = (hits.get(key) || []).filter((t) => now - t < WINDOW_MS);
   recent.push(now);
   hits.set(key, recent);
-  return recent.length > LIMIT;
+  return recent.length > limit;
 }
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
@@ -52,6 +56,16 @@ function send(res, status, body, type = "application/json; charset=utf-8") {
 }
 
 function readJson(req) {
+  return readBody(req).then((raw) => {
+    try {
+      return JSON.parse(raw.toString("utf8") || "{}");
+    } catch {
+      throw Object.assign(new Error("bad_json"), { status: 400 });
+    }
+  });
+}
+
+function readBody(req) {
   return new Promise((resolve, reject) => {
     const tooLarge = () => Object.assign(new Error("too_large"), { status: 413 });
     if (Number(req.headers["content-length"]) > MAX_BODY_BYTES) {
@@ -68,14 +82,7 @@ function readJson(req) {
       if (size > MAX_BODY_BYTES) overflow = true;
       if (!overflow) chunks.push(chunk);
     });
-    req.on("end", () => {
-      if (overflow) return reject(tooLarge());
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
-      } catch {
-        reject(Object.assign(new Error("bad_json"), { status: 400 }));
-      }
-    });
+    req.on("end", () => (overflow ? reject(tooLarge()) : resolve(Buffer.concat(chunks))));
     req.on("error", reject);
   });
 }
@@ -108,12 +115,51 @@ async function route(req, res) {
       model: "Meta Muse Spark",
       modelId: config.muse.model,
       configured: Boolean(config.muse.apiKey),
+      channels: {
+        api: true,
+        mcp: true,
+        whatsapp: whatsapp.isConfigured(),
+        telegram: Boolean(config.telegramToken),
+      },
       endpoints: {
         "POST /api/chat": "{ sessionId, text, image?: { mediaType, data(base64) } } -> { reply, attachments }",
         "GET /api/updates?sessionId=": "delivery notifications since the last poll",
+        "POST /mcp": "MCP server (Streamable HTTP) for Claude, ChatGPT and other AI assistants",
+        "GET|POST /whatsapp/webhook": "WhatsApp Cloud API webhook",
         "GET /media/listing/:id.svg": "listing photo",
       },
     });
+  }
+
+  if (url.pathname === "/whatsapp/webhook") {
+    if (!whatsapp.isConfigured()) return send(res, 404, { error: "whatsapp_not_configured" });
+    if (req.method === "GET") {
+      const [status, body] = whatsapp.verify(url);
+      return send(res, status, body, "text/plain; charset=utf-8");
+    }
+    if (req.method === "POST") {
+      const raw = await readBody(req);
+      const { status } = whatsapp.receive(raw, req.headers);
+      return send(res, status, { ok: status === 200 });
+    }
+  }
+
+  if (url.pathname === "/mcp") {
+    if (req.method === "GET") return send(res, 405, { error: "no_server_stream" });
+    if (req.method === "DELETE") {
+      mcp.endSession(req.headers);
+      return send(res, 200, { ok: true });
+    }
+    if (req.method === "POST") {
+      if (rateLimited(`mcp:${client}`, MCP_LIMIT)) return send(res, 429, { error: "slow_down" });
+      const result = await mcp.handle(await readJson(req), req.headers);
+      if (result.body === null) {
+        res.writeHead(202, result.headers);
+        return res.end();
+      }
+      res.writeHead(result.status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...result.headers });
+      return res.end(JSON.stringify(result.body));
+    }
   }
 
   const photo = url.pathname.match(/^\/media\/listing\/(\d+)\.svg$/);

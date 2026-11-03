@@ -40,7 +40,12 @@ Behind the chat is a two-sided marketplace. Local merchants (restaurants, bakeri
 
 ## This repository
 
-This is ASAP's agent server, rebuilt on Muse Spark for this hackathon. Every channel above sits on top of what this repo contains: one agent, one set of tools, and one set of money rules. Here the agent is served over an HTTP API that any client can use, over Telegram, and in a terminal CLI.
+This is ASAP's agent server, rebuilt on Muse Spark for this hackathon. Every channel above sits on top of what this repo contains: one agent, one set of tools, and one set of money rules. This server serves the same agent on:
+
+- **WhatsApp**, through Meta's WhatsApp Cloud API: Muse Spark answering on WhatsApp, Meta's model on Meta's messaging platform.
+- **MCP**, so Claude, ChatGPT or any MCP-capable assistant can run ASAP errands, with confirming a charge marked as an action that needs the person's approval.
+- **Telegram**, as a bot.
+- **An HTTP API** for any other client (a mobile app, a web app), and a terminal CLI.
 
 It ships with a built-in test mode, so judges can run every errand themselves in minutes: no sign-up, no bank account and no partner keys, just a Meta API key.
 
@@ -125,7 +130,21 @@ curl -s 'localhost:3000/api/updates?sessionId=judge-0001'   # the delivery notif
 
 To send a photo of a meter or bill, add `"image": {"mediaType": "image/jpeg", "data": "<base64>"}` to the chat body.
 
-**Other channels:** `npm run cli` chats in the terminal. With `TELEGRAM_BOT_TOKEN` set, `npm start` also serves the agent as a Telegram bot, including photos.
+### Channels
+
+**WhatsApp.** Create an app with the WhatsApp product in the Meta developer dashboard, then set `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and a `WHATSAPP_VERIFY_TOKEN` of your choice. Run `npm start` behind a public HTTPS URL, set the callback URL to `https://<your-host>/whatsapp/webhook` with the same verify token, and subscribe to the `messages` field. Text and photos both work. Every delivery's `X-Hub-Signature-256` is checked against the app secret before anything runs, and Meta's retries of the same message are answered once.
+
+**MCP.** `npm start` serves an MCP server at `/mcp` (Streamable HTTP). In Claude or ChatGPT, add a custom connector with the URL `https://<your-host>/mcp`. For a local check, any MCP client works:
+
+```bash
+npx @modelcontextprotocol/inspector   # connect to http://localhost:3000/mcp
+```
+
+The assistant gets the same tools ASAP's own agent uses, plus `get_updates` for deliveries and refunds. Read tools are annotated read-only, and `confirm_purchase`, `confirm_share` and `cancel_ride` are annotated destructive, so the assistant's host asks the person before money moves. Each session is its own test wallet; send `Authorization: Bearer <any key of 16+ characters>` to keep the same wallet across sessions.
+
+**Telegram.** Set `TELEGRAM_BOT_TOKEN`, and `npm start` also serves the agent as a Telegram bot, photos included.
+
+**Terminal.** `npm run cli`.
 
 ### Test mode
 
@@ -143,7 +162,7 @@ Test-mode details: merchants deliver to Yaba, Surulere, Ikeja, Lekki, VI, Ikoyi 
 ## Architecture
 
 ```
-HTTP API (text + photos) / Telegram / CLI
+WhatsApp (Cloud API) · MCP (Claude, ChatGPT, …) · Telegram · HTTP API · CLI
           │
    conversations.js ── per-user history, one turn at a time per user, photos dropped after their turn
           │
@@ -166,7 +185,7 @@ More detail in [docs/architecture.md](docs/architecture.md).
 npm test
 ```
 
-50 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, wallet top-ups, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
+62 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, the WhatsApp webhook (handshake, signature check, retries, photos) and the MCP server (session, tool annotations, a full quote-confirm-deliver run, wallet isolation), same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, wallet top-ups, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
 
 ## Built during the hackathon
 

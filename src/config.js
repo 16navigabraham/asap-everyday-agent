@@ -22,6 +22,15 @@ module.exports = {
 
   telegramToken: env.TELEGRAM_BOT_TOKEN || null,
 
+  // WhatsApp Cloud API (Meta). The channel is on only when all four are set.
+  whatsapp: {
+    token: env.WHATSAPP_TOKEN || null,
+    phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID || null,
+    verifyToken: env.WHATSAPP_VERIFY_TOKEN || null,
+    appSecret: env.WHATSAPP_APP_SECRET || null,
+    graphVersion: env.META_GRAPH_VERSION || "v21.0",
+  },
+
   wallet: {
     // Sandbox credit every new chat starts with. 1000000 kobo = NGN 10,000.
     starterKobo: number(env.STARTER_BALANCE_KOBO, 1_000_000),
