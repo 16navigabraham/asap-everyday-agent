@@ -202,6 +202,11 @@ npm test
 
 This repository existed before the hackathon as an earlier Python prototype (the October 2026 commit). Everything in the current code was written during the Meta Global AI Developer Hackathon: the rebuild on Muse Spark and the Meta Model API, the tool layer, every errand, the money-safety rules, the test mode, the demo and the tests. The commit history shows the full change.
 
+## Team
+
+- **[Herrenpower](https://github.com/Herrenpower)** — Founder, product. [@herrenpower](https://x.com/herrenpower)
+- **[Abraham](https://github.com/16navigabraham)** — Engineering. [@AbrahamNAVIG1](https://x.com/AbrahamNAVIG1)
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
