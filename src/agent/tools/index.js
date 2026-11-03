@@ -1,6 +1,13 @@
 "use strict";
 
-const TOOLS = [...require("./account"), ...require("./purchases")];
+const TOOLS = [
+  ...require("./account"),
+  ...require("./bills"),
+  ...require("./shop"),
+  ...require("./rides"),
+  ...require("./travel"),
+  ...require("./orders"),
+];
 
 const byName = new Map();
 for (const tool of TOOLS) {

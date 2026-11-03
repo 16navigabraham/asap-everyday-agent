@@ -1,6 +1,5 @@
 "use strict";
 
-const crypto = require("node:crypto");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -8,19 +7,20 @@ const path = require("node:path");
 const config = require("../config");
 const logger = require("../log");
 const notify = require("../notify");
-const modelSwitch = require("../model/switch");
-const { listProviders, getProvider } = require("../model/providers");
+const sandbox = require("../fulfilment/sandbox");
 const { handleMessage } = require("../conversations");
 
 /**
- * The web channel: a chat page, a JSON chat endpoint, a poll endpoint for
- * delivery notifications, and the model switch.
+ * The web channel: the chat page, a chat endpoint (text and optional photo),
+ * a poll endpoint for delivery notifications, and listing photos.
  */
 
 const PAGE = path.join(__dirname, "..", "..", "public", "index.html");
-const MAX_BODY_BYTES = 8 * 1024;
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024;
 const MAX_TEXT_CHARS = 1000;
 const SESSION = /^[A-Za-z0-9-]{8,64}$/;
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 const inbox = new Map();
 notify.register("web", (userId, text) => {
@@ -82,15 +82,20 @@ function readJson(req) {
   });
 }
 
-function isAdmin(req) {
-  if (!config.adminToken) return false;
-  const given = Buffer.from(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""));
-  const expected = Buffer.from(config.adminToken);
-  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+/** Text, or a photo block followed by the caption, as Muse Spark reads them. */
+function userContent(text, image) {
+  if (!image) return text;
+  const blocks = [{ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.data } }];
+  blocks.push({ type: "text", text: text || "(The user sent this photo without a caption.)" });
+  return blocks;
 }
 
-function modelsView() {
-  return { active: modelSwitch.current(), providers: listProviders(), switchable: Boolean(config.adminToken) };
+function checkImage(image) {
+  if (image === undefined || image === null) return null;
+  if (typeof image !== "object" || !IMAGE_TYPES.has(image.mediaType) || typeof image.data !== "string") return "bad_image";
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(image.data)) return "bad_image";
+  if ((image.data.length * 3) / 4 > MAX_IMAGE_BYTES) return "image_too_large";
+  return null;
 }
 
 async function route(req, res) {
@@ -102,17 +107,29 @@ async function route(req, res) {
   }
   if (req.method === "GET" && url.pathname === "/healthz") return send(res, 200, { ok: true });
 
+  if (req.method === "GET" && url.pathname === "/api/info") {
+    return send(res, 200, { model: "Meta Muse Spark", modelId: config.muse.model, configured: Boolean(config.muse.apiKey) });
+  }
+
+  const photo = url.pathname.match(/^\/media\/listing\/(\d+)\.svg$/);
+  if (req.method === "GET" && photo) {
+    const listing = sandbox.getListing(Number(photo[1]));
+    if (!listing) return send(res, 404, { error: "not_found" });
+    return send(res, 200, sandbox.listingPhotoSvg(listing), "image/svg+xml; charset=utf-8");
+  }
+
   if (req.method === "POST" && url.pathname === "/api/chat") {
     const body = await readJson(req);
     const sessionId = String(body.sessionId || "");
     const text = String(body.text || "").trim();
     if (!SESSION.test(sessionId)) return send(res, 400, { error: "bad_session" });
-    if (!text || text.length > MAX_TEXT_CHARS) return send(res, 400, { error: "bad_text" });
+    if (text.length > MAX_TEXT_CHARS || (!text && !body.image)) return send(res, 400, { error: "bad_text" });
+    const imageProblem = checkImage(body.image);
+    if (imageProblem) return send(res, 400, { error: imageProblem });
     if (rateLimited(client)) return send(res, 429, { error: "slow_down" });
 
-    const result = await handleMessage(`web:${sessionId}`, text);
-    const answeredBy = result.providers.map((id) => getProvider(id)?.label).filter(Boolean);
-    return send(res, 200, { reply: result.reply, answeredBy, failedOver: result.failedOver });
+    const result = await handleMessage(`web:${sessionId}`, userContent(text, body.image));
+    return send(res, 200, { reply: result.reply, attachments: result.attachments, model: result.model });
   }
 
   if (req.method === "GET" && url.pathname === "/api/updates") {
@@ -121,18 +138,6 @@ async function route(req, res) {
     const updates = inbox.get(sessionId) || [];
     inbox.delete(sessionId);
     return send(res, 200, { updates });
-  }
-
-  if (url.pathname === "/api/models") {
-    if (req.method === "GET") return send(res, 200, modelsView());
-    if (req.method === "POST") {
-      if (!isAdmin(req)) return send(res, 401, { error: "admin_token_required" });
-      const body = await readJson(req);
-      const outcome = modelSwitch.set(String(body.provider || ""));
-      if (!outcome.ok) return send(res, 400, { error: outcome.reason });
-      logger.info("Model switched", { provider: outcome.provider });
-      return send(res, 200, modelsView());
-    }
   }
 
   return send(res, 404, { error: "not_found" });
@@ -148,4 +153,4 @@ function start(port = config.port) {
   return new Promise((resolve) => server.listen(port, () => resolve(server)));
 }
 
-module.exports = { start, route };
+module.exports = { start, route, userContent };

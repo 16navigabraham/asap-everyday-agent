@@ -22,7 +22,7 @@ function create({ userId, kind, params, summary, principalKobo, feeKobo, turnId 
     status: "quoted",
     quotedInTurn: turnId || null,
     createdAt: new Date(now).toISOString(),
-    expiresAt: now + config.orders.quoteTtlMs,
+    expiresAt: now + config.sandbox.quoteTtlMs,
     history: [{ status: "quoted", at: new Date(now).toISOString() }],
     result: null,
   };
@@ -61,9 +61,14 @@ function forUser(userId, limit = 10) {
     .map((order) => expireIfStale(order));
 }
 
+/** The user's most recent order of a kind in one of the given statuses. */
+function latest(userId, kind, statuses) {
+  return forUser(userId, 50).find((order) => order.kind === kind && statuses.includes(order.status)) || null;
+}
+
 function reset() {
   orders.clear();
   nextId = 1;
 }
 
-module.exports = { create, get, move, expireIfStale, forUser, reset };
+module.exports = { create, get, move, expireIfStale, forUser, latest, reset };

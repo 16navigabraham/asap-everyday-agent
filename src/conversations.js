@@ -16,6 +16,10 @@ const FAILED_REPLY = "Something went wrong on my side and nothing was done. Plea
 const histories = new Map();
 const locks = new Map();
 
+const isPlainUserMessage = (message) =>
+  message.role === "user" &&
+  (typeof message.content === "string" || !message.content.some((block) => block.type === "tool_result"));
+
 /**
  * Drop old messages, but only ever cut just before a plain user message, so
  * no tool_use is ever separated from its tool_result.
@@ -23,9 +27,24 @@ const locks = new Map();
 function trim(messages) {
   if (messages.length <= MAX_MESSAGES) return messages;
   for (let i = messages.length - MAX_MESSAGES; i < messages.length; i += 1) {
-    if (messages[i].role === "user" && typeof messages[i].content === "string") return messages.slice(i);
+    if (isPlainUserMessage(messages[i])) return messages.slice(i);
   }
   return messages.slice(-2);
+}
+
+/**
+ * A photo is read once, in the turn it was sent. History keeps a note of it
+ * instead of the image bytes, so memory and every later request stay small.
+ */
+function withoutImages(message) {
+  if (message.role !== "user" || !Array.isArray(message.content)) return message;
+  if (!message.content.some((block) => block.type === "image")) return message;
+  return {
+    ...message,
+    content: message.content.map((block) =>
+      block.type === "image" ? { type: "text", text: "[The user sent a photo here, already read in that turn.]" } : block,
+    ),
+  };
 }
 
 function withLock(userId, fn) {
@@ -40,18 +59,18 @@ function withLock(userId, fn) {
 }
 
 /** Handle one inbound message. Never throws: a failed turn still gets a reply. */
-function handleMessage(userId, text, { call } = {}) {
+function handleMessage(userId, content, { call } = {}) {
   return withLock(userId, async () => {
     const history = histories.get(userId) || [];
     try {
-      const result = await runTurn({ history, userText: text, userId, call });
-      histories.set(userId, trim([...history, ...result.added]));
-      return { reply: result.reply, providers: result.providers, failedOver: result.failedOver };
+      const result = await runTurn({ history, userContent: content, userId, call });
+      histories.set(userId, trim([...history, ...result.added.map(withoutImages)]));
+      return { reply: result.reply, attachments: result.attachments, model: result.model };
     } catch (error) {
       // History is left as it was. Anything a tool did is still visible to the
-      // next turn through recent_activity, which reads live state.
+      // next turn through transaction_history, which reads live state.
       logger.error("Turn failed", { channel: userId.split(":")[0], error: error.message, status: error.status });
-      return { reply: FAILED_REPLY, providers: [], failedOver: false, error: true };
+      return { reply: FAILED_REPLY, attachments: [], model: null, error: true };
     }
   });
 }

@@ -3,21 +3,12 @@
 const config = require("./config");
 const logger = require("./log");
 const http = require("./channels/http");
-const modelSwitch = require("./model/switch");
-const { listProviders } = require("./model/providers");
 
 async function main() {
-  const providers = listProviders();
-  if (!providers.some((p) => p.configured)) {
-    logger.warn("No model provider configured. Set META_API_KEY (and optionally ANTHROPIC_API_KEY).");
-  }
+  if (!config.muse.apiKey) logger.warn("META_API_KEY is not set: every message will fail until it is.");
 
   await http.start();
-  logger.info("Web chat listening", {
-    port: config.port,
-    model: modelSwitch.current(),
-    configured: providers.filter((p) => p.configured).map((p) => p.id),
-  });
+  logger.info("Web chat listening", { port: config.port, model: config.muse.model });
 
   if (config.telegramToken) require("./channels/telegram").start();
 }

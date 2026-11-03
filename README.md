@@ -5,9 +5,9 @@
 <h1 align="center">ASAP Everyday Agent</h1>
 
 <p align="center">
-  Everyday errands in Nigeria over plain chat, powered by <strong>Meta Muse Spark</strong>.
+  Everyday errands in Nigeria over plain chat, built on <strong>Meta Muse Spark</strong>.
   <br>
-  Airtime, data, electricity and TV, with no app, no menus, and no money moving until you say yes.
+  Airtime, bills, food, rides, flights and payments, with no app, no menus, and no money moving until you say yes.
 </p>
 
 <p align="center">
@@ -23,27 +23,32 @@
 
 ## The problem
 
-Paying for everyday things in Nigeria means a different app, menu or USSD code for every errand: topping up your mum's line, buying a data bundle, paying the light bill before NEPA takes the light, renewing GOtv. All of it is small, frequent and fiddly, and a wrong digit on a meter number sends your money to a stranger's account with no way to get it back.
+Daily life in Nigeria runs on a pile of small, separate errands, each with its own app, USSD code or phone call: topping up your mum's line, buying data, paying the light bill before the power goes, renewing GOtv, ordering lunch, booking a ride, paying the driver, getting a flight to Abuja. They're frequent and fiddly, and a single wrong digit on a meter number sends your money to a stranger with no way back.
 
-ASAP turns each of these into one chat message: *"Pay ₦3,000 on my Ikeja prepaid meter 45031234567"*. The agent works out what you mean, looks up the account name so you can check it, shows you the total, and only charges you once you say yes.
+ASAP turns each of these into one chat message to an agent running on **Meta Muse Spark**. Muse works out what you mean, checks what needs checking (whose meter, which merchant delivers to you, whether that account really belongs to your driver), shows you the total, and only charges you once you say yes.
 
-This repository is the open-source core of ASAP's agent: the model integration, tool layer, money-safety rules and order lifecycle. It runs on its own against a built-in sandbox, so anyone can try it without real money or third-party accounts.
+This repository is the open-source core of ASAP's agent. It runs end to end against a built-in sandbox, so anyone can try every errand without real money or partner accounts.
 
 ## What it does
 
-| Errand | How it works |
-|---|---|
-| Airtime | MTN, Airtel, Glo, 9mobile, ₦50 to ₦50,000 |
-| Data bundles | Live plan list per network, quoted by plan id |
-| Electricity | Ikeja, Eko, Abuja, Ibadan, Enugu; prepaid gets a 20-digit token |
-| TV | DStv, GOtv, StarTimes, with the account name confirmed first |
-| Wallet | Balance, recent activity with live order status, sandbox top-ups |
+| Errand | What you say | What happens |
+|---|---|---|
+| Airtime and data | *"₦500 MTN for 08031234567"* | Quote, confirm, delivered. The number is saved for next time |
+| Electricity | *"Pay ₦3,000 on my Ikeja prepaid meter"*, or send a **photo** of the meter | Account name checked first; prepaid returns a 20-digit token |
+| TV | *"Renew my GOtv Jinja"* | Smartcard name checked, plan from the live list |
+| Food and goods | *"I'm in Yaba, I want jollof rice"* | Merchants who deliver to you, photos, a one-merchant basket, one delivery fee |
+| Rides | *"Ride from Yaba to Lekki Phase 1"* | Fare estimate and booking fee, a driver assigned, cancellable before pickup |
+| Paying the driver | *"Pay the driver ₦4,000 by transfer"* | Only to an account that resolves to *your* assigned driver's name |
+| Flights | *"Lagos to Abuja next Friday, 2 of us"* | Numbered options, pick one, confirm, booking reference |
+| Sending credit | *"Send ₦1,000 to 08012345678"* | Only to existing ASAP users, with its own confirmation step |
+| Funding | *"Add ₦5,000"* or *"Can I pay with USDC?"* | Bank transfer to your account number, or a USDC address on Base, Solana or Polygon |
+| Your money | *"What did I spend this month?"* | Live order status, wallet movements, spending by category |
 
-It works in English and Pidgin, and it asks exactly one question when something is missing instead of guessing.
+It handles English and Pidgin, remembers your name, area and saved numbers ("my usual", "Mum's line"), and asks exactly one question when something is missing instead of guessing.
 
-## Meta Muse Spark at the centre
+## Built on Meta Muse Spark
 
-Every turn is answered by **Muse Spark** through the **Meta Model API**. Meta's API uses the Messages API wire format, so the agent calls it with plain `fetch` (see [`src/model/providers.js`](src/model/providers.js)):
+Every turn is answered by **Muse Spark** through the **Meta Model API**. Meta's API uses the Messages wire format, so the agent calls it with plain `fetch`, no SDK (see [`src/model/muse.js`](src/model/muse.js)):
 
 ```js
 POST https://api.meta.ai/v1/messages
@@ -53,22 +58,28 @@ authorization: Bearer $META_API_KEY
   thinking: { type: "adaptive" }, output_config: { effort: "low" } }
 ```
 
-Muse Spark plans each errand as a chain of tool calls (look up the meter, show the name, quote, wait, confirm) and reasons before each step. Muse always reasons, so the effort is pinned to `low`; left unbounded, it can spend the whole token budget thinking and return no text.
+What Muse Spark does in this agent:
 
-**Live model switch and failover.** Claude can be configured as a second provider. The web page has a Muse Spark / Claude switch (behind an admin token) that takes effect on the very next message, and if a Muse call fails with an outage, rate limit or credit error, that call is retried once on the other provider. Every reply in the UI is labelled with the model that wrote it, failovers included. Failover is only allowed before a turn has run any tools, so two models never split one errand between them.
+- **Plans multi-step errands as tool calls.** Paying a light bill is: look up the meter, show the name, wait for a yes, quote, wait for another yes, confirm. A food order is: search, add items, ask for the address, price, confirm. Muse chooses and sequences 29 tools.
+- **Reads photos.** Send a picture of a meter, bill or smartcard and Muse reads the number off it, repeats it back, and uses it once you confirm. The image goes to Muse as an image block in that turn only; history keeps a note instead of the bytes.
+- **Reasons before acting.** Muse Spark always reasons, so the effort is pinned to `low`. Left unbounded, it can spend the whole token budget thinking and return no text.
+
+A transient failure (network, timeout, 429, 5xx) is retried once. A failed call produced no tool calls, so a retry can never repeat an action.
 
 ## Money safety, enforced in code
 
-The model never moves money on its own judgement. Each rule below is enforced by code and covered by a test:
+Muse decides *what* the user wants. The code decides whether money moves. Every rule below is enforced in code and covered by a test:
 
-1. **Purchase tools only quote.** `buy_airtime`, `buy_data`, `pay_electricity` and `pay_tv` price the request and store an order in `quoted`. Nothing is charged.
-2. **Quote and confirmation can't happen in the same turn.** `confirm_purchase` refuses an order quoted earlier in the same turn, so the user always sees the total before the debit.
-3. **One money action per model response.** If the model asks for two at once, the second is refused.
-4. **Arguments are validated in-process** against each tool's schema plus semantic bounds (amount limits, valid Nigerian numbers, meter formats) before any handler runs.
-5. **An idempotent ledger.** Every debit and refund has a unique reference, so a retried confirmation charges once.
-6. **Refunds need proof of failure.** A provider decline refunds automatically. An unknown outcome (a timeout) holds the money in `needs_review`, because refunding something that might have been delivered pays out twice.
-7. **Failures are reported honestly.** When a tool throws, the model never sees the raw error. It gets a fixed instruction saying the action did not run and must not be described as successful, or, for a failed lookup, that it doesn't know the answer and must say so.
-8. **Bill payments check the account name first.** The prompt requires `lookup_customer` and the user's confirmation of the name before any electricity or TV quote.
+1. **Tools that cost money only quote.** Airtime, data, bills, `place_order`, `request_ride`, `pay_driver`, `choose_option` and `share_credits` all store an order in `quoted` and charge nothing.
+2. **Quote and confirmation can never happen in the same turn.** The user always sees the total before the debit, even if the model tries to chain them.
+3. **One money action per model response.** If the model asks for a second, it is refused.
+4. **Separate confirmation for sending credit.** `confirm_purchase` cannot send a share, and `confirm_share` cannot charge a purchase.
+5. **Arguments are validated in-process** against each tool's schema plus bounds (amount limits, Nigerian numbers, meter and account formats) before any handler runs.
+6. **An idempotent ledger.** Every debit, refund and deposit has a unique reference, so a retried confirmation charges once.
+7. **Refunds need proof of failure.** A provider decline refunds automatically. An unknown outcome holds the money in `needs_review`, because refunding something that might have been delivered pays out twice.
+8. **Checks before paying a person.** Electricity and TV show the registered name first, driver transfers must resolve to the assigned driver's name, and shares only go to real ASAP users.
+9. **Honest failure reporting.** When a tool throws, Muse never sees the raw error. It gets a fixed instruction: the action did not run and must not be described as successful, or, for a lookup, it doesn't know the answer and must say so.
+10. **Masked saved numbers.** Saved phone and meter numbers reach the model masked. A purchase resolves the real number from its id, server-side.
 
 ## Try it
 
@@ -81,41 +92,41 @@ npm start                   # http://localhost:3000
 
 There is nothing to install: it has zero npm dependencies and needs only Node 22+.
 
-- **Web chat:** `npm start`, then open http://localhost:3000.
-- **Terminal:** `npm run cli`. Type `/model claude` or `/model muse` to switch.
-- **Telegram:** set `TELEGRAM_BOT_TOKEN` and `npm start` serves the bot too.
+- **Web chat** (best for trying everything, including photos): `npm start`, then open http://localhost:3000.
+- **Terminal:** `npm run cli`.
+- **Telegram:** set `TELEGRAM_BOT_TOKEN`, and `npm start` serves the bot too, photos included.
 
-To enable the live switch on the web page, set both `META_API_KEY` and `ANTHROPIC_API_KEY`, plus an `ADMIN_TOKEN`.
+### The sandbox
 
-### Sandbox numbers
-
-Every chat starts with ₦5,000 of demo credit. Deliveries are simulated by [`src/fulfilment/sandbox.js`](src/fulfilment/sandbox.js), and the last four digits of a phone, meter or smartcard number trigger the failure paths:
+Every chat starts with ₦10,000 of demo credit. Merchants, drivers, flights, names and references are invented by [`src/fulfilment/sandbox.js`](src/fulfilment/sandbox.js). The last four digits of a phone, meter, smartcard or account number trigger the failure paths:
 
 | Ends in | Outcome |
 |---|---|
 | anything else | Delivered, with a reference (and a token for prepaid electricity) |
-| `0000` | Account not found on lookup |
+| `0000` | Not found on lookup |
 | `9999` | Provider declines, order refunded automatically |
 | `7777` | Provider times out, money held for review, not refunded |
 
-A good demo script: ask for your balance, buy ₦500 MTN airtime for `08031234567`, then buy airtime for `08031239999` and watch the refund land in your wallet.
+Other sandbox details: merchants deliver to Yaba, Surulere, Ikeja, Lekki, VI, Ikoyi and Ajah. Credit can be shared with `08012345678`, `08098765432` or `07011112222`. Flights cover Lagos, Abuja, Port Harcourt, Kano, Enugu, Owerri, Calabar, Uyo, Benin and Asaba.
+
+**Demo script:** check the balance; buy ₦500 airtime for `08031234567`; send a photo of a meter and pay it; order jollof rice in Yaba and ask for a photo; book a ride and cancel it to see the fee refunded; buy airtime for `08031239999` to see an automatic refund.
 
 ## Architecture
 
 ```
-web chat / Telegram / CLI
+web chat (text + photos) / Telegram / CLI
           │
-   conversations.js ── per-user history, one turn at a time per user
+   conversations.js ── per-user history, one turn at a time per user, photos dropped after their turn
           │
-     agent/turn.js ──── model ⇄ tools loop, max 6 steps
+     agent/turn.js ──── Muse Spark ⇄ tools loop, max 8 steps
        │        │
-model/client.js  agent/executor.js ── validation, one-money-action rule, timeouts
- Muse ⇄ Claude          │
- switch + failover   agent/tools/* ── quote-only purchase tools, reads, confirm
+ model/muse.js  agent/executor.js ── validation, one-money-action rule, timeouts, safe errors
+ Meta Model API         │
+                  agent/tools/ ── account · bills · shop · rides · travel · orders
                         │
-               orders/checkout.js ── quote → confirm (debit) → fulfil → deliver / refund / review
-                │               │
-        wallet/ledger.js   fulfilment/sandbox.js
+               orders/checkout.js ── quote → confirm (debit) → fulfil → delivered / assigned / refunded / review
+                │          │            │
+        wallet/ledger.js  users/profile.js  fulfilment/sandbox.js
 ```
 
 More detail in [docs/architecture.md](docs/architecture.md).
@@ -126,11 +137,11 @@ More detail in [docs/architecture.md](docs/architecture.md).
 npm test
 ```
 
-34 tests on Node's built-in runner. The model is stubbed and there is no network access: the full purchase lifecycle, same-turn confirmation refusal, double-confirm idempotency, refunds, the review path, cross-user isolation, executor rules, the Muse request shape, the switch, failover, and the HTTP surface.
+51 tests on Node's built-in runner, with Muse stubbed and no network access. They cover every errand end to end, same-turn confirmation refusal, double-confirm idempotency, refunds and the review path, ride cancellation rules, driver-name checks, share isolation, saved-number masking, simulated deposits, photo handling, the Muse request shape and retry, executor rules, and the HTTP surface.
 
 ## Scope
 
-This is the agent core, not the whole ASAP product. The production service runs on WhatsApp with real payment and fulfilment partners, identity verification and account controls, and these are intentionally not part of this repository. Here fulfilment is simulated, wallets live in memory, and no real money moves.
+This is the agent core, not the whole ASAP product. The production service runs on WhatsApp with real payment and fulfilment partners, identity verification, account security and internal operations tooling, none of which is part of this repository. Here fulfilment is simulated, data lives in memory, and no real money moves.
 
 ## License
 

@@ -9,21 +9,22 @@
   :root {
     --bg: #f4f5f2; --panel: #ffffff; --ink: #14161a; --muted: #6b7078; --line: #e3e5e0;
     --brand: #0a7c5a; --brand-ink: #ffffff; --me: #0a7c5a; --me-ink: #ffffff; --them: #eef0ec;
-    --update: #fff6dc; --update-line: #f1dc9a; --warn: #a35a00;
+    --update: #fff6dc; --update-line: #f1dc9a; --meta: #0866ff;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0f1113; --panel: #171a1d; --ink: #eceef0; --muted: #9aa0a8; --line: #2a2f34;
       --brand: #2fbf8f; --brand-ink: #062118; --me: #1f8f6a; --me-ink: #ffffff; --them: #22272b;
-      --update: #2b2716; --update-line: #4d4425; --warn: #f0b35a;
+      --update: #2b2716; --update-line: #4d4425; --meta: #5b9dff;
     }
   }
   :root[data-theme="dark"] {
     --bg: #0f1113; --panel: #171a1d; --ink: #eceef0; --muted: #9aa0a8; --line: #2a2f34;
     --brand: #2fbf8f; --brand-ink: #062118; --me: #1f8f6a; --me-ink: #ffffff; --them: #22272b;
-    --update: #2b2716; --update-line: #4d4425; --warn: #f0b35a;
+    --update: #2b2716; --update-line: #4d4425; --meta: #5b9dff;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; }
   body {
     background: var(--bg); color: var(--ink);
@@ -31,53 +32,67 @@
     display: flex; justify-content: center;
   }
   .app { width: 100%; max-width: 720px; height: 100%; display: flex; flex-direction: column; background: var(--panel); border-inline: 1px solid var(--line); }
-  header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-weight: 800; }
-  .title { flex: 1; min-width: 140px; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .logo { width: 36px; height: 36px; border-radius: 10px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-weight: 800; flex: none; }
+  .title { flex: 1; min-width: 0; }
   .title b { display: block; }
   .title small { color: var(--muted); }
-  .switch { display: flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; }
-  .switch button { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer; }
-  .switch button[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); font-weight: 600; }
-  .switch button:disabled { cursor: not-allowed; opacity: .45; }
+  .pill { flex: none; font-size: 12px; font-weight: 600; color: var(--meta); border: 1px solid currentColor; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
   main { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   .msg { max-width: 82%; padding: 9px 13px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .me { align-self: flex-end; background: var(--me); color: var(--me-ink); border-bottom-right-radius: 4px; }
   .them { align-self: flex-start; background: var(--them); border-bottom-left-radius: 4px; }
   .update { align-self: center; background: var(--update); border: 1px solid var(--update-line); font-size: 14px; max-width: 92%; }
+  .msg img { display: block; max-width: 100%; border-radius: 10px; margin-bottom: 6px; }
   .by { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }
-  .by.fo { color: var(--warn); }
   .typing { color: var(--muted); font-style: italic; }
   .chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 16px 10px; }
   .chips button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .preview { display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; font-size: 13px; color: var(--muted); }
+  .preview img { height: 44px; border-radius: 6px; }
+  .preview button { border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; text-decoration: underline; }
   form { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--line); }
-  input { flex: 1; min-width: 0; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
-  form button { border: 0; border-radius: 12px; padding: 0 18px; background: var(--brand); color: var(--brand-ink); font: inherit; font-weight: 600; cursor: pointer; }
+  input[type="text"] { flex: 1; min-width: 0; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  .attach { flex: none; width: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+  .attach svg { width: 20px; height: 20px; }
+  form > button[type="submit"] { flex: none; border: 0; border-radius: 12px; padding: 0 18px; background: var(--brand); color: var(--brand-ink); font: inherit; font-weight: 600; cursor: pointer; }
   form button:disabled { opacity: .5; }
   .note { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16px 8px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
 <body>
 <div class="app">
   <header>
     <div class="logo" aria-hidden="true">A</div>
-    <div class="title"><b>ASAP</b><small id="active">Loading model…</small></div>
-    <div class="switch" role="group" aria-label="Model">
-      <button type="button" data-provider="muse">Muse Spark</button>
-      <button type="button" data-provider="claude">Claude</button>
-    </div>
+    <div class="title"><b>ASAP</b><small>Errands, sorted</small></div>
+    <span class="pill" id="model">Meta Muse Spark</span>
   </header>
   <main id="log" aria-live="polite"></main>
   <div class="chips" id="chips">
     <button type="button">What's my balance?</button>
     <button type="button">Buy ₦500 MTN airtime for 08031234567</button>
-    <button type="button">Show me Airtel data plans</button>
     <button type="button">Pay ₦3,000 on my Ikeja prepaid meter 45031234567</button>
+    <button type="button">I'm in Yaba, I want jollof rice</button>
+    <button type="button">Get me a ride from Yaba to Lekki Phase 1</button>
+    <button type="button">Flight from Lagos to Abuja next Friday</button>
+    <button type="button">Send ₦1,000 to 08012345678</button>
+    <button type="button">Can I top up with USDC?</button>
+  </div>
+  <div class="preview" id="preview" hidden>
+    <img id="previewImg" alt="">
+    <span>Photo attached</span>
+    <button type="button" id="removePhoto">remove</button>
   </div>
   <div class="note">Sandbox: demo wallet, simulated deliveries. No real money moves.</div>
   <form id="form">
-    <input id="text" autocomplete="off" maxlength="1000" placeholder="Tell ASAP what you need…" aria-label="Message">
-    <button id="sendBtn">Send</button>
+    <label class="attach" title="Send a photo of a bill, meter or card">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <span class="sr">Attach a photo</span>
+      <input type="file" id="photo" accept="image/*" hidden>
+    </label>
+    <input type="text" id="text" autocomplete="off" maxlength="1000" placeholder="Tell ASAP what you need…" aria-label="Message">
+    <button type="submit" id="sendBtn">Send</button>
   </form>
 </div>
 <script>
@@ -86,8 +101,10 @@
   const form = document.getElementById("form");
   const input = document.getElementById("text");
   const sendBtn = document.getElementById("sendBtn");
-  const active = document.getElementById("active");
-  const switches = [...document.querySelectorAll(".switch button")];
+  const photoInput = document.getElementById("photo");
+  const preview = document.getElementById("preview");
+  const previewImg = document.getElementById("previewImg");
+  let pendingImage = null;
 
   let sessionId;
   try { sessionId = sessionStorage.getItem("asap-session"); } catch {}
@@ -96,14 +113,20 @@
     try { sessionStorage.setItem("asap-session", sessionId); } catch {}
   }
 
-  function bubble(kind, text, by, failedOver) {
+  function bubble(kind, text, { by, images = [] } = {}) {
     const el = document.createElement("div");
     el.className = `msg ${kind}`;
-    el.textContent = text;
+    for (const src of images) {
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = "";
+      el.appendChild(img);
+    }
+    if (text) el.appendChild(document.createTextNode(text));
     if (by) {
       const tag = document.createElement("span");
-      tag.className = failedOver ? "by fo" : "by";
-      tag.textContent = failedOver ? `${by} · failover` : by;
+      tag.className = "by";
+      tag.textContent = by;
       el.appendChild(tag);
     }
     log.appendChild(el);
@@ -111,9 +134,49 @@
     return el;
   }
 
+  // Downscale in the browser: a phone photo is often 5MB+, the meter number needs far less.
+  function shrink(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        const url = canvas.toDataURL("image/jpeg", 0.85);
+        URL.revokeObjectURL(img.src);
+        resolve({ url, image: { mediaType: "image/jpeg", data: url.split(",")[1] } });
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  photoInput.addEventListener("change", async () => {
+    const file = photoInput.files[0];
+    photoInput.value = "";
+    if (!file) return;
+    try {
+      pendingImage = await shrink(file);
+      previewImg.src = pendingImage.url;
+      preview.hidden = false;
+      input.focus();
+    } catch {
+      bubble("them", "Couldn't read that photo. Try another one.");
+    }
+  });
+  document.getElementById("removePhoto").addEventListener("click", () => {
+    pendingImage = null;
+    preview.hidden = true;
+  });
+
   async function send(text) {
     document.getElementById("chips").hidden = true;
-    bubble("me", text);
+    const image = pendingImage;
+    pendingImage = null;
+    preview.hidden = true;
+    bubble("me", text, { images: image ? [image.url] : [] });
     input.value = "";
     sendBtn.disabled = true;
     const typing = bubble("them typing", "ASAP is on it…");
@@ -121,15 +184,17 @@
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId, text }),
+        body: JSON.stringify({ sessionId, text, image: image ? image.image : undefined }),
       });
       const data = await res.json();
       typing.remove();
       if (!res.ok) {
-        bubble("them", data.error === "slow_down" ? "Too many messages, give it a minute." : "That didn't send. Try again.");
+        const reasons = { slow_down: "Too many messages, give it a minute.", image_too_large: "That photo is too large." };
+        bubble("them", reasons[data.error] || "That didn't send. Try again.");
         return;
       }
-      bubble("them", data.reply, data.answeredBy.join(" + "), data.failedOver);
+      bubble("them", data.reply, { by: "Meta Muse Spark" });
+      for (const a of data.attachments || []) bubble("them", a.caption, { images: [a.url] });
     } catch {
       typing.remove();
       bubble("them", "Can't reach ASAP right now. Check your connection.");
@@ -142,47 +207,15 @@
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const text = input.value.trim();
-    if (text) send(text);
+    if (text || pendingImage) send(text);
   });
   document.getElementById("chips").addEventListener("click", (e) => {
     if (e.target.tagName === "BUTTON") send(e.target.textContent);
   });
 
-  function renderModels(view) {
-    const current = view.providers.find((p) => p.id === view.active);
-    active.textContent = current ? `Answering with ${current.label} (${current.model})` : "No model configured";
-    for (const btn of switches) {
-      const p = view.providers.find((x) => x.id === btn.dataset.provider);
-      btn.setAttribute("aria-pressed", String(btn.dataset.provider === view.active));
-      btn.disabled = !p || !p.configured;
-      btn.title = !p?.configured ? "Not configured on this server" : view.switchable ? "" : "Switching needs the admin token";
-    }
-  }
-
-  async function loadModels() {
-    try { renderModels(await (await fetch("/api/models")).json()); } catch {}
-  }
-
-  for (const btn of switches) {
-    btn.addEventListener("click", async () => {
-      let token = "";
-      try { token = sessionStorage.getItem("asap-admin") || ""; } catch {}
-      if (!token) token = prompt("Admin token to switch models:") || "";
-      if (!token) return;
-      const res = await fetch("/api/models", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ provider: btn.dataset.provider }),
-      });
-      if (res.status === 401) {
-        try { sessionStorage.removeItem("asap-admin"); } catch {}
-        alert("Wrong admin token.");
-        return;
-      }
-      try { sessionStorage.setItem("asap-admin", token); } catch {}
-      if (res.ok) renderModels(await res.json());
-    });
-  }
+  fetch("/api/info").then((r) => r.json()).then((info) => {
+    document.getElementById("model").title = `Model: ${info.modelId}`;
+  }).catch(() => {});
 
   async function poll() {
     try {
@@ -191,10 +224,9 @@
       for (const u of updates || []) bubble("update", u.text);
     } catch {}
   }
-
-  loadModels();
   setInterval(poll, 2500);
-  bubble("them", "Hi, I'm ASAP. Airtime, data, light bill or TV, just tell me what you need.");
+
+  bubble("them", "Hi, I'm ASAP. Airtime, data, light, TV, food, rides, flights, just tell me what you need. You can also send a photo of a bill or meter.");
 })();
 </script>
 </body>

@@ -5,8 +5,10 @@
  *
  *   quoted ──confirm──> paid ──> fulfilling ──> delivered
  *     │                  │           │
- *     ├─> expired        │           ├─> failed ──> refunded
- *     └─> cancelled      │           └─> needs_review
+ *     ├─> expired        │           ├─> assigned ──> delivered      (rides: driver on the way)
+ *     └─> cancelled      │           │       └─> refunded            (ride cancelled before pickup)
+ *                        │           ├─> failed ──> refunded
+ *                        │           └─> needs_review
  *                        └─> refunded
  *
  * Two rules carry the safety of the whole thing:
@@ -20,7 +22,8 @@
 const TRANSITIONS = {
   quoted: ["paid", "expired", "cancelled"],
   paid: ["fulfilling", "refunded"],
-  fulfilling: ["delivered", "failed", "needs_review"],
+  fulfilling: ["delivered", "assigned", "failed", "needs_review"],
+  assigned: ["delivered", "refunded"],
   failed: ["refunded"],
   needs_review: ["delivered", "refunded"],
   delivered: [],
