@@ -73,29 +73,33 @@ const MERCHANTS = [
 ];
 
 const LISTINGS = [
-  { id: 101, merchantId: 1, name: "Jollof rice and chicken", priceKobo: 350_000, tags: "food jollof rice chicken lunch" },
-  { id: 102, merchantId: 1, name: "Amala, ewedu and assorted", priceKobo: 300_000, tags: "food amala ewedu swallow" },
-  { id: 103, merchantId: 1, name: "Pounded yam and egusi", priceKobo: 380_000, tags: "food pounded yam egusi swallow" },
-  { id: 104, merchantId: 1, name: "Suya (large)", priceKobo: 250_000, tags: "food suya meat snack" },
-  { id: 201, merchantId: 2, name: "Red velvet cake, 8 inch", priceKobo: 2_500_000, tags: "cake birthday red velvet" },
+  { id: 101, merchantId: 1, name: "Jollof rice and chicken", priceKobo: 350_000, tags: "food jollof rice chicken lunch iresi shinkafa osikapa adiye kaza okuko onje abinci nri" },
+  { id: 102, merchantId: 1, name: "Amala, ewedu and assorted", priceKobo: 300_000, tags: "food amala ewedu swallow onje abinci nri" },
+  { id: 103, merchantId: 1, name: "Pounded yam and egusi", priceKobo: 380_000, tags: "food pounded yam egusi swallow iyan sakwara onje abinci nri" },
+  { id: 104, merchantId: 1, name: "Suya (large)", priceKobo: 250_000, tags: "food suya meat snack eran nama anu" },
+  { id: 201, merchantId: 2, name: "Red velvet cake, 8 inch", priceKobo: 2_500_000, tags: "cake birthday red velvet keki" },
   { id: 202, merchantId: 2, name: "Meat pie (box of 6)", priceKobo: 450_000, tags: "snack meat pie pastry" },
-  { id: 203, merchantId: 2, name: "Chocolate cupcakes (6)", priceKobo: 600_000, tags: "cake cupcake chocolate" },
-  { id: 301, merchantId: 3, name: "20W fast charger, USB-C", priceKobo: 850_000, tags: "gadget charger phone usb" },
+  { id: 203, merchantId: 2, name: "Chocolate cupcakes (6)", priceKobo: 600_000, tags: "cake cupcake chocolate keki" },
+  { id: 301, merchantId: 3, name: "20W fast charger, USB-C", priceKobo: 850_000, tags: "gadget charger phone usb chaja" },
   { id: 302, merchantId: 3, name: "Wireless earbuds", priceKobo: 1_800_000, tags: "gadget earbuds headphones audio" },
   { id: 303, merchantId: 3, name: "10000mAh power bank", priceKobo: 1_500_000, tags: "gadget power bank battery" },
-  { id: 401, merchantId: 4, name: "Rice, 5kg bag", priceKobo: 750_000, tags: "grocery rice foodstuff" },
-  { id: 402, merchantId: 4, name: "Tomatoes and pepper mix", priceKobo: 200_000, tags: "grocery tomato pepper vegetables" },
-  { id: 403, merchantId: 4, name: "Eggs, crate of 30", priceKobo: 550_000, tags: "grocery eggs" },
+  { id: 401, merchantId: 4, name: "Rice, 5kg bag", priceKobo: 750_000, tags: "grocery rice foodstuff iresi shinkafa osikapa" },
+  { id: 402, merchantId: 4, name: "Tomatoes and pepper mix", priceKobo: 200_000, tags: "grocery tomato pepper vegetables tomati tumatir ata barkono ose" },
+  { id: 403, merchantId: 4, name: "Eggs, crate of 30", priceKobo: 550_000, tags: "grocery eggs eyin kwai akwa" },
 ];
 
 const normaliseArea = (area) => String(area || "").toLowerCase().replace(/[^a-z]/g, "");
 
+// Yoruba, Igbo and Hausa spellings carry tone marks and dots (ìrẹsì). Search
+// ignores them, so "iresi" and "ìrẹsì" find the same thing.
+const plain = (text) => String(text).normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
 function findListings(query, area) {
-  const words = String(query).toLowerCase().split(/\W+/).filter((w) => w.length > 2);
+  const words = plain(query).split(/[^a-z0-9]+/).filter((w) => w.length > 2);
   const where = normaliseArea(area);
   return LISTINGS.map((listing) => {
     const merchant = MERCHANTS.find((m) => m.id === listing.merchantId);
-    const haystack = `${listing.name} ${listing.tags}`.toLowerCase();
+    const haystack = plain(`${listing.name} ${listing.tags}`);
     const score = words.filter((w) => haystack.includes(w) || haystack.includes(w.replace(/s$/, ""))).length;
     return { listing, merchant, score };
   })

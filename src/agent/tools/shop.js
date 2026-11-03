@@ -30,8 +30,9 @@ const findListings = defineTool({
   name: "find_listings",
   kind: "read",
   description:
-    "Search goods local merchants sell: food, groceries, cakes, gadgets. Goods only, never services. Use the user's " +
-    "own words as the query. Filters to merchants delivering to their saved area when one is known. Charges nothing.",
+    "Search goods local merchants sell: food, groceries, cakes, gadgets. Goods only, never services. Pass simple " +
+    "English item words (translate first: ìrẹsì / shinkafa / osikapa -> rice); common Yoruba, Hausa and Igbo item names " +
+    "also match. Filters to merchants delivering to their saved area when one is known. Charges nothing.",
   properties: {
     query: { type: "string" },
     area: { type: "string", description: "Only if they just said where they are; otherwise the saved area is used." },

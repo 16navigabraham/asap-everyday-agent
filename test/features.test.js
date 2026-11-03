@@ -220,3 +220,19 @@ test("a photo is sent to Muse in its turn but kept out of later history", async 
   await handleMessage(USER, "yes", { call: second });
   assert.doesNotMatch(JSON.stringify(second.seen[0]), /"type":"image"/);
 });
+
+test("product search understands Yoruba, Hausa and Igbo item names, with or without tone marks", async () => {
+  for (const query of ["ìrẹsì", "iresi", "shinkafa", "osikapa"]) {
+    const found = await useTool(USER, "find_listings", { query });
+    assert.ok(found.results.some((r) => /rice/i.test(r.name)), `${query} should find rice`);
+  }
+  const eggs = await useTool(USER, "find_listings", { query: "kwai" });
+  assert.equal(eggs.results[0].name, "Eggs, crate of 30");
+});
+
+test("the agent is told to reply in the user's own language and keep money in digits", () => {
+  const { SYSTEM_PROMPT } = require("../src/agent/prompt");
+  for (const language of ["Yoruba", "Hausa", "Igbo", "Pidgin"]) assert.match(SYSTEM_PROMPT, new RegExp(language));
+  assert.match(SYSTEM_PROMPT, /Reply in the language the user is using/);
+  assert.match(SYSTEM_PROMPT, /in digits/);
+});

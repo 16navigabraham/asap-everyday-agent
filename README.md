@@ -64,7 +64,7 @@ It ships with a built-in test mode, so judges can run every errand themselves in
 | Funding the wallet | *"Add ₦5,000"* | Bank transfer to your own account number. A stablecoin deposit is also accepted and converted to naira on arrival |
 | Your money | *"What did I spend this month?"* | Live order status, wallet movements, spending by category |
 
-It handles English and Pidgin, remembers your name, area and saved numbers ("my usual", "Mum's line"), and asks exactly one question when something is missing instead of guessing.
+It speaks the way people here speak: Yoruba, Hausa, Igbo, Nigerian Pidgin and English, or a mix, replying in the user's own language while keeping every amount and number in digits. It remembers your name, area and saved numbers ("my usual", "Mum's line"), and asks exactly one question when something is missing instead of guessing.
 
 ## Built on Meta Muse Spark
 
