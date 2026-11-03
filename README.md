@@ -42,7 +42,7 @@ ASAP is a live product by ZELABS LTD ([useasap.xyz](https://useasap.xyz)), and i
 - **WhatsApp:** the main channel. Chat with ASAP like any other contact.
 - **Telegram:** the same agent as a Telegram bot.
 - **Web app:** an installable app at app.useasap.xyz, for chatting with ASAP from any browser.
-- **Your own AI assistant:** an MCP server, so Claude, ChatGPT or any MCP-capable assistant can run ASAP errands for you.
+- **Your own AI assistant:** an MCP server, so any MCP-capable AI assistant can run ASAP errands for you.
 
 Behind the chat is a two-sided marketplace. Local merchants (restaurants, bakeries, grocers, gadget shops) list what they sell on the ASAP merchant dashboard, receive orders, deliver, and get paid out. Affiliates earn by referring new users.
 
@@ -51,7 +51,7 @@ Behind the chat is a two-sided marketplace. Local merchants (restaurants, bakeri
 This is ASAP's agent server, rebuilt on Muse Spark for this hackathon. Every channel above sits on top of what this repo contains: one agent, one set of tools, and one set of money rules. This server serves the same agent on:
 
 - **WhatsApp**, through Meta's WhatsApp Cloud API: Muse Spark answering on WhatsApp, Meta's model on Meta's messaging platform.
-- **MCP**, so Claude, ChatGPT or any MCP-capable assistant can run ASAP errands, with confirming a charge marked as an action that needs the person's approval.
+- **MCP**, so any MCP-capable AI assistant can run ASAP errands, with confirming a charge marked as an action that needs the person's approval.
 - **Telegram**, as a bot.
 - **An HTTP API** for any other client (a mobile app, a web app), and a terminal CLI.
 
@@ -145,7 +145,7 @@ To send a photo of a meter or bill, add `"image": {"mediaType": "image/jpeg", "d
 
 **WhatsApp.** Create an app with the WhatsApp product in the Meta developer dashboard, then set `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and a `WHATSAPP_VERIFY_TOKEN` of your choice. Run `npm start` behind a public HTTPS URL, set the callback URL to `https://<your-host>/whatsapp/webhook` with the same verify token, and subscribe to the `messages` field. Text, voice notes and photos all work. Every delivery's `X-Hub-Signature-256` is checked against the app secret before anything runs, and Meta's retries of the same message are answered once.
 
-**MCP.** `npm start` serves an MCP server at `/mcp` (Streamable HTTP). In Claude or ChatGPT, add a custom connector with the URL `https://<your-host>/mcp`. For a local check, any MCP client works:
+**MCP.** `npm start` serves an MCP server at `/mcp` (Streamable HTTP). In any MCP-capable assistant, add a custom connector with the URL `https://<your-host>/mcp`. For a local check, any MCP client works:
 
 ```bash
 npx @modelcontextprotocol/inspector   # connect to http://localhost:3000/mcp
@@ -173,7 +173,7 @@ Test-mode details: merchants deliver to Yaba, Surulere, Ikeja, Lekki, VI, Ikoyi 
 ## Architecture
 
 ```
-WhatsApp (Cloud API) · MCP (Claude, ChatGPT, …) · Telegram · HTTP API · CLI
+WhatsApp (Cloud API) · MCP (any AI assistant) · Telegram · HTTP API · CLI
           │
    conversations.js ── per-user history, one turn at a time per user, photos dropped after their turn
           │

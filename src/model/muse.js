@@ -10,9 +10,6 @@ const logger = require("../log");
  * tool_use / tool_result blocks), so this is a single fetch, no SDK.
  */
 
-// Version header of the Messages wire format, which Meta's endpoint speaks.
-const MESSAGES_API_VERSION = "2023-06-01";
-
 class ModelError extends Error {
   constructor(message, status = null) {
     super(message);
@@ -49,7 +46,6 @@ async function callOnce(body, fetchImpl) {
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${config.muse.apiKey}`,
-        "anthropic-version": MESSAGES_API_VERSION,
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(config.muse.timeoutMs),

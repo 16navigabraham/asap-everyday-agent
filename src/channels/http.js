@@ -140,7 +140,7 @@ async function route(req, res) {
       endpoints: {
         "POST /api/chat": "{ sessionId, text, image?: { mediaType, data(base64) }, audio?: { mediaType, data(base64) } } -> { reply, attachments }",
         "GET /api/updates?sessionId=": "delivery notifications since the last poll",
-        "POST /mcp": "MCP server (Streamable HTTP) for Claude, ChatGPT and other AI assistants",
+        "POST /mcp": "MCP server (Streamable HTTP) for any MCP-capable AI assistant",
         "GET|POST /whatsapp/webhook": "WhatsApp Cloud API webhook",
         "GET /media/listing/:id.svg": "listing photo",
       },

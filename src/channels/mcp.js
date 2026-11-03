@@ -7,8 +7,8 @@ const { TOOLS } = require("../agent/tools");
 const { executeTools } = require("../agent/executor");
 
 /**
- * ASAP as an MCP server, so a person's own AI assistant (Claude, ChatGPT,
- * any MCP client) can run ASAP errands for them.
+ * ASAP as an MCP server, so a person's own AI assistant (any MCP client)
+ * can run ASAP errands for them.
  *
  * Streamable HTTP transport, JSON responses: POST /mcp with one JSON-RPC
  * message. `initialize` opens a session (Mcp-Session-Id header), which
