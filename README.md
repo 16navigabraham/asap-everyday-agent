@@ -12,12 +12,16 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/model-Meta%20Muse%20Spark-0866ff" alt="Model: Meta Muse Spark">
+  <img src="https://img.shields.io/badge/model-Muse%20Spark%201.1%20%2B%201.2-0866ff" alt="Model: Muse Spark 1.1 + 1.2">
   <img src="https://img.shields.io/badge/node-22%2B-339933" alt="Node 22+">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
 </p>
 
 <p align="center">Built for the Meta Global AI Developer Hackathon, theme: <em>Build for Your World</em>.</p>
+
+<p align="center"><strong>Model:</strong> <code>muse-spark-1.1</code> for every chat turn and tool call, <code>muse-spark-1.2</code> for voice-note transcription (audio understanding via Chat Completions). Both run on Meta's hosted Model API — nothing is self-hosted.</p>
+
+<p align="center">This is the repo to clone and run for the demo. It's standalone: it doesn't call ASAP's live production backend, so nothing here depends on ASAP's main (private) codebase.</p>
 
 ---
 
